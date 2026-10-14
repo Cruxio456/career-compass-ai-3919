@@ -14,7 +14,114 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      interview_sessions: {
+        Row: {
+          answer: string
+          created_at: string
+          feedback: string
+          id: string
+          question: string
+          score: number | null
+          target_role: string
+          user_id: string
+        }
+        Insert: {
+          answer?: string
+          created_at?: string
+          feedback?: string
+          id?: string
+          question: string
+          score?: number | null
+          target_role?: string
+          user_id: string
+        }
+        Update: {
+          answer?: string
+          created_at?: string
+          feedback?: string
+          id?: string
+          question?: string
+          score?: number | null
+          target_role?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          career_goal: string
+          created_at: string
+          experience_level: string
+          full_name: string
+          skills: string[]
+          target_role: string
+          updated_at: string
+          user_id: string
+          weekly_hours: number
+        }
+        Insert: {
+          career_goal?: string
+          created_at?: string
+          experience_level?: string
+          full_name?: string
+          skills?: string[]
+          target_role?: string
+          updated_at?: string
+          user_id: string
+          weekly_hours?: number
+        }
+        Update: {
+          career_goal?: string
+          created_at?: string
+          experience_level?: string
+          full_name?: string
+          skills?: string[]
+          target_role?: string
+          updated_at?: string
+          user_id?: string
+          weekly_hours?: number
+        }
+        Relationships: []
+      }
+      roadmap_tasks: {
+        Row: {
+          category: string
+          created_at: string
+          description: string
+          due_date: string | null
+          id: string
+          is_complete: boolean
+          sort_order: number
+          title: string
+          user_id: string
+          week_number: number
+        }
+        Insert: {
+          category?: string
+          created_at?: string
+          description?: string
+          due_date?: string | null
+          id?: string
+          is_complete?: boolean
+          sort_order?: number
+          title: string
+          user_id: string
+          week_number?: number
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          description?: string
+          due_date?: string | null
+          id?: string
+          is_complete?: boolean
+          sort_order?: number
+          title?: string
+          user_id?: string
+          week_number?: number
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
