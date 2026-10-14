@@ -1,5 +1,13 @@
 {
   "version": "7",
   "dialect": "postgresql",
-  "entries": []
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1791951039525,
+      "tag": "0000_create_polar_jobs_career_data",
+      "breakpoints": true
+    }
+  ]
 }
