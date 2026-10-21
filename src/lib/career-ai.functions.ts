@@ -4,6 +4,55 @@ import { createResponsesCall } from "./ai-responses.server";
 
 type RequestInput = { role: string; level: string; goal: string; hours: number; skills: string };
 
+export type JobMatchResult = {
+  score: number;
+  summary: string;
+  matchedKeywords: string[];
+  missingKeywords: { keyword: string; priority: "high" | "medium" | "low"; evidence: string }[];
+  experienceGaps: { requirement: string; resumeEvidence: string; nextStep: string }[];
+  recommendations: string[];
+};
+
+export function normalizeJobMatchResult(input: unknown): JobMatchResult {
+  if (!input || typeof input !== "object") throw new Error("The match report could not be formatted. Please try again.");
+  const value = input as Record<string, unknown>;
+  if (typeof value["score"] !== "number" || typeof value["summary"] !== "string") {
+    throw new Error("The match report was incomplete. Please try scanning again.");
+  }
+  const strings = (item: unknown, limit = 10) => Array.isArray(item)
+    ? item.filter((entry): entry is string => typeof entry === "string").slice(0, limit).map((entry) => entry.slice(0, 240))
+    : [];
+  const missingKeywords = Array.isArray(value["missingKeywords"]) ? value["missingKeywords"].slice(0, 12).flatMap((entry) => {
+    if (!entry || typeof entry !== "object") return [];
+    const row = entry as Record<string, unknown>;
+    if (typeof row["keyword"] !== "string") return [];
+    const priority = row["priority"] === "high" || row["priority"] === "low" ? row["priority"] : "medium";
+    return [{
+      keyword: row["keyword"].slice(0, 100),
+      priority,
+      evidence: typeof row["evidence"] === "string" ? row["evidence"].slice(0, 240) : "Not clearly demonstrated in the resume.",
+    }];
+  }) : [];
+  const experienceGaps = Array.isArray(value["experienceGaps"]) ? value["experienceGaps"].slice(0, 10).flatMap((entry) => {
+    if (!entry || typeof entry !== "object") return [];
+    const row = entry as Record<string, unknown>;
+    if (typeof row["requirement"] !== "string") return [];
+    return [{
+      requirement: row["requirement"].slice(0, 180),
+      resumeEvidence: typeof row["resumeEvidence"] === "string" ? row["resumeEvidence"].slice(0, 240) : "The resume does not clearly show this yet.",
+      nextStep: typeof row["nextStep"] === "string" ? row["nextStep"].slice(0, 240) : "Add a relevant example if you have one.",
+    }];
+  }) : [];
+  return {
+    score: Math.min(100, Math.max(0, Math.round(value["score"]))),
+    summary: value["summary"].slice(0, 500),
+    matchedKeywords: strings(value["matchedKeywords"], 12),
+    missingKeywords,
+    experienceGaps,
+    recommendations: strings(value["recommendations"], 8),
+  };
+}
+
 function validateRequest(input: unknown): RequestInput {
   if (!input || typeof input !== "object") throw new Error("Add your career details before continuing.");
   const value = input as Record<string, unknown>;
@@ -101,6 +150,31 @@ const interviewFn = createServerFn({ method: "POST" })
     }
   });
 
+const jobDescriptionMatchFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => {
+    if (!input || typeof input !== "object") throw new Error("Paste your resume and a job description first.");
+    const value = input as Record<string, unknown>;
+    const resume = typeof value["resume"] === "string" ? value["resume"].trim().slice(0, 12000) : "";
+    const jobDescription = typeof value["jobDescription"] === "string" ? value["jobDescription"].trim().slice(0, 12000) : "";
+    const role = typeof value["role"] === "string" ? value["role"].trim().slice(0, 140) : "";
+    if (resume.length < 80 || jobDescription.length < 80) {
+      throw new Error("Add at least a few lines to both your resume and the job description.");
+    }
+    return { resume, jobDescription, role };
+  })
+  .handler(async ({ data }) => {
+    const response = await generate(
+      new Request("https://polar-jobs.local/job-match", { method: "POST" }),
+      "You are a careful ATS and recruiting analyst. Compare the resume only against the supplied job description. Estimate a 0–100 ATS match score based on demonstrated skills, relevant experience, and required qualifications; do not imply that you know a real ATS algorithm. Separate exact or close keyword matches from missing or not-evidenced terms. Prioritize genuinely important requirements, distinguish absent evidence from proven lack of experience, never invent candidate qualifications, and give actionable suggestions grounded in the resume. Return only valid JSON with an object containing: score (integer 0–100), summary (string), matchedKeywords (array of strings), missingKeywords (array of objects with keyword, priority [high|medium|low], evidence), experienceGaps (array of objects with requirement, resumeEvidence, nextStep), and recommendations (array of strings). No markdown fences.",
+      JSON.stringify({ targetRole: data.role, resume: data.resume, jobDescription: data.jobDescription }),
+    );
+    let parsed: unknown;
+    try { parsed = JSON.parse(response); } catch { throw new Error("The match report could not be formatted. Please scan again."); }
+    return normalizeJobMatchResult(parsed);
+  });
+
 export const generateCareerRoadmap = roadmapFn;
 export const reviewResume = resumeFn;
 export const reviewInterviewAnswer = interviewFn;
+export const matchJobDescription = jobDescriptionMatchFn;
