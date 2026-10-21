@@ -7,11 +7,11 @@ type RequestInput = { role: string; level: string; goal: string; hours: number; 
 function validateRequest(input: unknown): RequestInput {
   if (!input || typeof input !== "object") throw new Error("Add your career details before continuing.");
   const value = input as Record<string, unknown>;
-  const role = typeof value.role === "string" ? value.role.trim().slice(0, 140) : "";
-  const goal = typeof value.goal === "string" ? value.goal.trim().slice(0, 1400) : "";
-  const level = typeof value.level === "string" ? value.level.trim().slice(0, 80) : "";
-  const skills = typeof value.skills === "string" ? value.skills.trim().slice(0, 900) : "";
-  const hours = typeof value.hours === "number" ? Math.min(40, Math.max(1, Math.round(value.hours))) : 5;
+  const role = typeof value["role"] === "string" ? value["role"].trim().slice(0, 140) : "";
+  const goal = typeof value["goal"] === "string" ? value["goal"].trim().slice(0, 1400) : "";
+  const level = typeof value["level"] === "string" ? value["level"].trim().slice(0, 80) : "";
+  const skills = typeof value["skills"] === "string" ? value["skills"].trim().slice(0, 900) : "";
+  const hours = typeof value["hours"] === "number" ? Math.min(40, Math.max(1, Math.round(value["hours"]))) : 5;
   if (!role) throw new Error("Add a target role so your coaching can be tailored to it.");
   return { role, goal, level, skills, hours };
 }
@@ -44,12 +44,12 @@ const roadmapFn = createServerFn({ method: "POST" })
     if (!Array.isArray(parsed.tasks) || parsed.tasks.length < 1) throw new Error("Your roadmap did not include any steps. Please try again.");
     const tasks = parsed.tasks.slice(0, 10).map((task, index) => {
       const row = task as Record<string, unknown>;
-      const week = typeof row.week === "number" ? Math.min(6, Math.max(1, Math.round(row.week))) : Math.ceil((index + 1) / 2);
+      const week = typeof row["week"] === "number" ? Math.min(6, Math.max(1, Math.round(row["week"]))) : Math.ceil((index + 1) / 2);
       return {
         user_id: context.userId,
-        title: typeof row.title === "string" ? row.title.slice(0, 140) : `Career milestone ${index + 1}`,
-        description: typeof row.description === "string" ? row.description.slice(0, 360) : "Take a focused step toward your next role.",
-        category: typeof row.category === "string" ? row.category.slice(0, 60) : "Career growth",
+        title: typeof row["title"] === "string" ? row["title"].slice(0, 140) : `Career milestone ${index + 1}`,
+        description: typeof row["description"] === "string" ? row["description"].slice(0, 360) : "Take a focused step toward your next role.",
+        category: typeof row["category"] === "string" ? row["category"].slice(0, 60) : "Career growth",
         week_number: week,
         sort_order: index,
       };
@@ -62,8 +62,8 @@ const resumeFn = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => {
     if (!input || typeof input !== "object") throw new Error("Paste your resume and target role first.");
     const value = input as Record<string, unknown>;
-    const resume = typeof value.resume === "string" ? value.resume.trim().slice(0, 12000) : "";
-    const role = typeof value.role === "string" ? value.role.trim().slice(0, 140) : "";
+    const resume = typeof value["resume"] === "string" ? value["resume"].trim().slice(0, 12000) : "";
+    const role = typeof value["role"] === "string" ? value["role"].trim().slice(0, 140) : "";
     if (resume.length < 80 || !role) throw new Error("Add at least a few lines of resume text and your target role.");
     return { resume, role };
   })
@@ -78,9 +78,9 @@ const interviewFn = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => {
     if (!input || typeof input !== "object") throw new Error("Add your interview question and answer first.");
     const value = input as Record<string, unknown>;
-    const question = typeof value.question === "string" ? value.question.trim().slice(0, 800) : "";
-    const answer = typeof value.answer === "string" ? value.answer.trim().slice(0, 5000) : "";
-    const role = typeof value.role === "string" ? value.role.trim().slice(0, 140) : "";
+    const question = typeof value["question"] === "string" ? value["question"].trim().slice(0, 800) : "";
+    const answer = typeof value["answer"] === "string" ? value["answer"].trim().slice(0, 5000) : "";
+    const role = typeof value["role"] === "string" ? value["role"].trim().slice(0, 140) : "";
     if (!question || answer.length < 20 || !role) throw new Error("Write a little more so your answer can be reviewed.");
     return { question, answer, role };
   })
