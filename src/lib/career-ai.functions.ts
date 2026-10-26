@@ -26,7 +26,7 @@ export function normalizeJobMatchResult(input: unknown): JobMatchResult {
     if (!entry || typeof entry !== "object") return [];
     const row = entry as Record<string, unknown>;
     if (typeof row["keyword"] !== "string") return [];
-    const priority = row["priority"] === "high" || row["priority"] === "low" ? row["priority"] : "medium";
+    const priority: JobMatchResult["missingKeywords"][number]["priority"] = row["priority"] === "high" || row["priority"] === "low" ? row["priority"] : "medium";
     return [{
       keyword: row["keyword"].slice(0, 100),
       priority,
