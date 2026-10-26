@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
-import { generateCareerRoadmap, reviewInterviewAnswer, reviewResume } from "@/lib/career-ai.functions";
+import { generateCareerRoadmap, matchJobDescription, reviewInterviewAnswer, reviewResume, type JobMatchResult } from "@/lib/career-ai.functions";
 import type { Tables } from "@/integrations/supabase/types";
 import careerFocus from "@/assets/career-focus.jpg";
 
@@ -61,6 +61,10 @@ function PolarJobs() {
   const [resumeText, setResumeText] = useState("");
   const [resumeFeedback, setResumeFeedback] = useState("");
   const [resumeBusy, setResumeBusy] = useState(false);
+  const [resumeTool, setResumeTool] = useState<"feedback" | "matcher">("feedback");
+  const [jobDescription, setJobDescription] = useState("");
+  const [matchBusy, setMatchBusy] = useState(false);
+  const [matchResult, setMatchResult] = useState<JobMatchResult | null>(null);
   const [answer, setAnswer] = useState("");
   const [interviewBusy, setInterviewBusy] = useState(false);
   const [latestFeedback, setLatestFeedback] = useState<{ score: number; feedback: string } | null>(null);
@@ -115,6 +119,7 @@ function PolarJobs() {
   const currentQuestion = useMemo(() => buildQuestion(profile?.target_role || "your next role"), [profile?.target_role]);
   const generateRoadmap = useServerFn(generateCareerRoadmap);
   const getResumeReview = useServerFn(reviewResume);
+  const getJobMatch = useServerFn(matchJobDescription);
   const getInterviewReview = useServerFn(reviewInterviewAnswer);
 
   const saveProfile = async () => {
@@ -158,6 +163,17 @@ function PolarJobs() {
       setResumeFeedback(result);
     } catch (error) { toast.error(error instanceof Error ? error.message : "Resume feedback is unavailable right now."); }
     finally { setResumeBusy(false); }
+  };
+
+  const submitJobMatch = async () => {
+    if (!profile) return;
+    setMatchBusy(true); setMatchResult(null);
+    try {
+      const result = await getJobMatch({ data: { role: profile.target_role, resume: resumeText, jobDescription } });
+      setMatchResult(result);
+      toast.success("Your job match report is ready.");
+    } catch (error) { toast.error(error instanceof Error ? error.message : "The job description couldn’t be scanned right now."); }
+    finally { setMatchBusy(false); }
   };
 
   const submitInterviewAnswer = async () => {
@@ -241,7 +257,7 @@ function PolarJobs() {
           {workspace.isLoading ? <div className="py-20 text-center text-muted-foreground">Loading your career plan…</div> : workspace.error ? <div className="surface p-6"><p>We couldn’t open your saved career details.</p><Button className="mt-4" onClick={() => void workspace.refetch()}>Try again</Button></div> : !profile ? null : <>
             {section === "Overview" && <Overview profile={profile} tasks={tasks} interviews={interviews} completion={completion} completedTasks={completedTasks} greetingName={greetingName} setSection={setSection} createRoadmap={createRoadmap} roadmapBusy={roadmapBusy} toggleTask={toggleTask} />}
             {section === "My roadmap" && <Roadmap profile={profile} tasks={tasks} createRoadmap={createRoadmap} roadmapBusy={roadmapBusy} toggleTask={toggleTask} />}
-            {section === "Resume studio" && <ResumeStudio role={profile.target_role} resumeText={resumeText} setResumeText={setResumeText} feedback={resumeFeedback} busy={resumeBusy} submit={submitResume} />}
+            {section === "Resume studio" && <ResumeStudio role={profile.target_role} resumeText={resumeText} setResumeText={(value) => { setResumeText(value); setMatchResult(null); }} feedback={resumeFeedback} busy={resumeBusy} submit={submitResume} tool={resumeTool} setTool={setResumeTool} jobDescription={jobDescription} setJobDescription={(value) => { setJobDescription(value); setMatchResult(null); }} matchResult={matchResult} matchBusy={matchBusy} submitMatch={submitJobMatch} />}
             {section === "Interview practice" && <InterviewPractice question={currentQuestion} answer={answer} setAnswer={setAnswer} busy={interviewBusy} feedback={latestFeedback} submit={submitInterviewAnswer} sessions={interviews} />}
             {section === "Progress" && <ProgressView tasks={tasks} interviews={interviews} completion={completion} completedTasks={completedTasks} />}
             <section className="mt-8 border-t soft-divider pt-7">
