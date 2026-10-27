@@ -7,7 +7,7 @@ import {
   ArrowDownRight, ArrowRight, ArrowUpRight, Award, BookOpenCheck, BriefcaseBusiness,
   Check, CheckCircle2, ChevronDown, Circle, Compass, FileText, Flame, Gauge,
   LogOut, MessageSquareText, PencilLine, Plus, Send, Sparkles, Target, TrendingUp,
-  UserRound, WandSparkles,
+  Upload, UserRound, WandSparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
 import { generateCareerRoadmap, matchJobDescription, reviewInterviewAnswer, reviewResume, type JobMatchResult } from "@/lib/career-ai.functions";
+import { extractResumeText } from "@/lib/resume-upload.functions";
 import type { Tables } from "@/integrations/supabase/types";
 import careerFocus from "@/assets/career-focus.jpg";
 
@@ -65,6 +66,8 @@ function PolarJobs() {
   const [jobDescription, setJobDescription] = useState("");
   const [matchBusy, setMatchBusy] = useState(false);
   const [matchResult, setMatchResult] = useState<JobMatchResult | null>(null);
+  const [resumeUploadBusy, setResumeUploadBusy] = useState(false);
+  const [resumeFileName, setResumeFileName] = useState("");
   const [answer, setAnswer] = useState("");
   const [interviewBusy, setInterviewBusy] = useState(false);
   const [latestFeedback, setLatestFeedback] = useState<{ score: number; feedback: string } | null>(null);
@@ -121,6 +124,7 @@ function PolarJobs() {
   const getResumeReview = useServerFn(reviewResume);
   const getJobMatch = useServerFn(matchJobDescription);
   const getInterviewReview = useServerFn(reviewInterviewAnswer);
+  const extractResume = useServerFn(extractResumeText);
 
   const saveProfile = async () => {
     if (!profile || !userId) return;
@@ -174,6 +178,21 @@ function PolarJobs() {
       toast.success("Your job match report is ready.");
     } catch (error) { toast.error(error instanceof Error ? error.message : "The job description couldn’t be scanned right now."); }
     finally { setMatchBusy(false); }
+  };
+
+  const uploadResumeFile = async (file: File) => {
+    setResumeUploadBusy(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const result = await extractResume({ data: form });
+      setResumeText(result.text);
+      setResumeFileName(result.fileName);
+      setMatchResult(null);
+      toast.success(`Added “${result.fileName}”${result.pages ? ` (${result.pages} pages)` : ""} to your resume box.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "That file couldn’t be read. Try pasting your resume text instead.");
+    } finally { setResumeUploadBusy(false); }
   };
 
   const submitInterviewAnswer = async () => {
@@ -257,7 +276,7 @@ function PolarJobs() {
           {workspace.isLoading ? <div className="py-20 text-center text-muted-foreground">Loading your career plan…</div> : workspace.error ? <div className="surface p-6"><p>We couldn’t open your saved career details.</p><Button className="mt-4" onClick={() => void workspace.refetch()}>Try again</Button></div> : !profile ? null : <>
             {section === "Overview" && <Overview profile={profile} tasks={tasks} interviews={interviews} completion={completion} completedTasks={completedTasks} greetingName={greetingName} setSection={setSection} createRoadmap={createRoadmap} roadmapBusy={roadmapBusy} toggleTask={toggleTask} />}
             {section === "My roadmap" && <Roadmap profile={profile} tasks={tasks} createRoadmap={createRoadmap} roadmapBusy={roadmapBusy} toggleTask={toggleTask} />}
-            {section === "Resume studio" && <ResumeStudio role={profile.target_role} resumeText={resumeText} setResumeText={(value) => { setResumeText(value); setMatchResult(null); }} feedback={resumeFeedback} busy={resumeBusy} submit={submitResume} tool={resumeTool} setTool={setResumeTool} jobDescription={jobDescription} setJobDescription={(value) => { setJobDescription(value); setMatchResult(null); }} matchResult={matchResult} matchBusy={matchBusy} submitMatch={submitJobMatch} />}
+            {section === "Resume studio" && <ResumeStudio role={profile.target_role} resumeText={resumeText} setResumeText={(value) => { setResumeText(value); setMatchResult(null); }} feedback={resumeFeedback} busy={resumeBusy} submit={submitResume} tool={resumeTool} setTool={setResumeTool} jobDescription={jobDescription} setJobDescription={(value) => { setJobDescription(value); setMatchResult(null); }} matchResult={matchResult} matchBusy={matchBusy} submitMatch={submitJobMatch} uploadBusy={resumeUploadBusy} onUploadFile={(file) => void uploadResumeFile(file)} fileName={resumeFileName} />}
             {section === "Interview practice" && <InterviewPractice question={currentQuestion} answer={answer} setAnswer={setAnswer} busy={interviewBusy} feedback={latestFeedback} submit={submitInterviewAnswer} sessions={interviews} />}
             {section === "Progress" && <ProgressView tasks={tasks} interviews={interviews} completion={completion} completedTasks={completedTasks} />}
             <section className="mt-8 border-t soft-divider pt-7">
@@ -341,22 +360,34 @@ function Roadmap({ profile, tasks, createRoadmap, roadmapBusy, toggleTask }: { p
   </>;
 }
 
-function ResumeStudio({ role, resumeText, setResumeText, feedback, busy, submit, tool, setTool, jobDescription, setJobDescription, matchResult, matchBusy, submitMatch }: { role: string; resumeText: string; setResumeText: (value: string) => void; feedback: string; busy: boolean; submit: () => void; tool: "feedback" | "matcher"; setTool: (tool: "feedback" | "matcher") => void; jobDescription: string; setJobDescription: (value: string) => void; matchResult: JobMatchResult | null; matchBusy: boolean; submitMatch: () => void }) {
-  return <><PageTitle kicker="Resume studio" title="A sharper story, at a glance." description="Get focused, role-specific feedback on what to bring forward and what to improve." action={<div role="tablist" aria-label="Resume tools" className="flex items-center gap-1 rounded-md border border-border p-1"><Button role="tab" aria-selected={tool === "feedback"} variant={tool === "feedback" ? "secondary" : "ghost"} size="sm" onClick={() => setTool("feedback")}>Resume feedback</Button><Button role="tab" aria-selected={tool === "matcher"} variant={tool === "matcher" ? "secondary" : "ghost"} size="sm" onClick={() => setTool("matcher")}>JD matcher</Button></div>} />
+function ResumeStudio({ role, resumeText, setResumeText, feedback, busy, submit, tool, setTool, jobDescription, setJobDescription, matchResult, matchBusy, submitMatch, uploadBusy, onUploadFile, fileName }: { role: string; resumeText: string; setResumeText: (value: string) => void; feedback: string; busy: boolean; submit: () => void; tool: "feedback" | "matcher"; setTool: (tool: "feedback" | "matcher") => void; jobDescription: string; setJobDescription: (value: string) => void; matchResult: JobMatchResult | null; matchBusy: boolean; submitMatch: () => void; uploadBusy: boolean; onUploadFile: (file: File) => void; fileName: string }) {
+  const uploadControl = <ResumeUpload busy={uploadBusy} onFile={onUploadFile} fileName={fileName} />;
+  return <><PageTitle kicker="Resume studio" title="A sharper story, at a glance." description="Upload or paste your resume, then get focused, role-specific feedback on what to bring forward and what to improve." action={<div role="tablist" aria-label="Resume tools" className="flex items-center gap-1 rounded-md border border-border p-1"><Button role="tab" aria-selected={tool === "feedback"} variant={tool === "feedback" ? "secondary" : "ghost"} size="sm" onClick={() => setTool("feedback")}>Resume feedback</Button><Button role="tab" aria-selected={tool === "matcher"} variant={tool === "matcher" ? "secondary" : "ghost"} size="sm" onClick={() => setTool("matcher")}>JD matcher</Button></div>} />
     {tool === "feedback" ? <>
-      <div className="grid gap-5 lg:grid-cols-[1fr_0.9fr]"><section className="surface p-5 sm:p-6"><div className="flex items-center gap-2"><PencilLine className="size-4 text-primary" /><h2 className="text-sm font-semibold">Your resume text</h2></div><p className="mt-2 text-xs leading-5 text-muted-foreground">Paste the text of your resume. It’s used to prepare this review and isn’t added to your saved profile.</p><Textarea className="mt-4 min-h-[310px] resize-y text-sm leading-6" value={resumeText} onChange={(e) => setResumeText(e.target.value)} placeholder="Paste your resume here — experience, projects, skills…" /><p className="mt-2 text-right text-[11px] text-muted-foreground">{resumeText.length.toLocaleString()} / 12,000</p><Button className="mt-3" onClick={submit} disabled={busy || resumeText.trim().length < 80}>{busy ? "Reviewing your resume…" : "Get my feedback"}<Sparkles className="size-4" /></Button></section>
+      <div className="grid gap-5 lg:grid-cols-[1fr_0.9fr]"><section className="surface p-5 sm:p-6"><div className="flex items-center justify-between gap-3"><div className="flex items-center gap-2"><PencilLine className="size-4 text-primary" /><h2 className="text-sm font-semibold">Your resume text</h2></div>{uploadControl}</div><p className="mt-2 text-xs leading-5 text-muted-foreground">Upload a PDF, Word, or text file — or paste the text. It’s used to prepare this review and isn’t added to your saved profile.</p><Textarea className="mt-4 min-h-[310px] resize-y text-sm leading-6" value={resumeText} onChange={(e) => setResumeText(e.target.value)} placeholder="Paste your resume here — experience, projects, skills…" /><p className="mt-2 text-right text-[11px] text-muted-foreground">{resumeText.length.toLocaleString()} / 12,000</p><Button className="mt-3" onClick={submit} disabled={busy || resumeText.trim().length < 80}>{busy ? "Reviewing your resume…" : "Get my feedback"}<Sparkles className="size-4" /></Button></section>
         <section className="surface-soft min-h-72 p-5 sm:p-6"><p className="eyebrow">Your coach’s notes</p>{feedback ? <div className="feedback-copy mt-4 whitespace-pre-wrap text-sm leading-7 text-foreground">{feedback}</div> : <div className="flex min-h-56 flex-col items-center justify-center text-center"><div className="flex size-11 items-center justify-center rounded-full bg-secondary text-primary"><FileText className="size-5" /></div><p className="mt-4 text-sm font-medium">Room for a stronger story.</p><p className="mt-2 max-w-xs text-xs leading-5 text-muted-foreground">Your specific strengths and a useful rewrite will show up here after your review.</p></div>}</section>
       </div><div className="surface mt-5 flex items-start gap-3 p-4"><BriefcaseBusiness className="mt-0.5 size-4 shrink-0 text-coral" /><p className="text-xs leading-5 text-muted-foreground">Reviewing for <span className="text-foreground">{role || "your target role"}</span>. Add or update your target role in your career profile.</p></div>
     </> : <>
       <div className="mb-5 flex items-start gap-3 border-l-2 border-primary pl-4"><Target className="mt-0.5 size-4 shrink-0 text-primary" /><p className="text-sm leading-6 text-muted-foreground">Compare your resume with one specific job posting. Your text is used for this scan and isn’t saved to your profile.</p></div>
       <div className="grid gap-5 lg:grid-cols-2">
-        <section className="surface p-5 sm:p-6"><div className="flex items-center gap-2"><PencilLine className="size-4 text-primary" /><h2 className="text-sm font-semibold">Your resume</h2></div><Textarea aria-label="Resume for job match" className="mt-4 min-h-[280px] resize-y text-sm leading-6" maxLength={12000} value={resumeText} onChange={(e) => setResumeText(e.target.value)} placeholder="Paste your resume text…" /><p className="mt-2 text-right text-[11px] text-muted-foreground">{resumeText.length.toLocaleString()} / 12,000</p></section>
+        <section className="surface p-5 sm:p-6"><div className="flex items-center justify-between gap-3"><div className="flex items-center gap-2"><PencilLine className="size-4 text-primary" /><h2 className="text-sm font-semibold">Your resume</h2></div>{uploadControl}</div><Textarea aria-label="Resume for job match" className="mt-4 min-h-[280px] resize-y text-sm leading-6" maxLength={12000} value={resumeText} onChange={(e) => setResumeText(e.target.value)} placeholder="Paste your resume text…" /><p className="mt-2 text-right text-[11px] text-muted-foreground">{resumeText.length.toLocaleString()} / 12,000</p></section>
         <section className="surface p-5 sm:p-6"><div className="flex items-center gap-2"><BriefcaseBusiness className="size-4 text-coral" /><h2 className="text-sm font-semibold">Target job description</h2></div><Textarea aria-label="Target job description" className="mt-4 min-h-[280px] resize-y text-sm leading-6" maxLength={12000} value={jobDescription} onChange={(e) => setJobDescription(e.target.value)} placeholder="Paste the job posting, including responsibilities and requirements…" /><p className="mt-2 text-right text-[11px] text-muted-foreground">{jobDescription.length.toLocaleString()} / 12,000</p></section>
       </div>
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3"><p className="text-xs text-muted-foreground">Matching for <span className="text-foreground">{role || "your target role"}</span></p><Button onClick={submitMatch} disabled={matchBusy || resumeText.trim().length < 80 || jobDescription.trim().length < 80}>{matchBusy ? "Comparing both documents…" : "Scan for a match"}<Sparkles className="size-4" /></Button></div>
       {matchResult && <JobMatchReport result={matchResult} />}
     </>}
   </>;
+}
+
+function ResumeUpload({ busy, onFile, fileName }: { busy: boolean; onFile: (file: File) => void; fileName: string }) {
+  return <div className="flex items-center gap-2">
+    {fileName && !busy ? <span className="hidden max-w-44 truncate text-[11px] text-muted-foreground sm:block" title={fileName}>{fileName}</span> : null}
+    <label className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md border border-input bg-background px-3 text-xs font-medium hover:bg-accent hover:text-accent-foreground">
+      <Upload className="size-3.5" />
+      {busy ? "Reading…" : "Upload file"}
+      <input aria-label="Upload a resume file (PDF, Word, or plain text)" className="sr-only" type="file" accept=".pdf,.docx,.txt,.md,application/pdf,text/plain" disabled={busy} onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file) onFile(file); }} />
+    </label>
+  </div>;
 }
 
 function JobMatchReport({ result }: { result: JobMatchResult }) {
