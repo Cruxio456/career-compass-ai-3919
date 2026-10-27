@@ -46,7 +46,7 @@ async function extractPdfText(file: File): Promise<{ text: string; pages?: numbe
   const { extractText, getDocumentProxy } = await import("unpdf");
   const pdf = await getDocumentProxy(new Uint8Array(await file.arrayBuffer()));
   const extracted = await extractText(pdf, { mergePages: true });
-  const text = typeof extracted.text === "string" ? extracted.text : extracted.text.join("\n");
+  const text = Array.isArray(extracted.text) ? extracted.text.join("\n") : extracted.text;
   return { text, pages: extracted.totalPages };
 }
 
@@ -84,5 +84,5 @@ export const extractResumeText = createServerFn({ method: "POST" })
     if (text.length < MIN_RESUME_TEXT_CHARS) {
       throw new Error("We couldn’t read enough text from that file. If it’s a scanned image, paste the text instead.");
     }
-    return { fileName: name, text, pages };
+    return pages === undefined ? { fileName: name, text } : { fileName: name, text, pages };
   });
