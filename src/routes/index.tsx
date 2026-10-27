@@ -7,7 +7,7 @@ import {
   ArrowDownRight, ArrowRight, ArrowUpRight, Award, BookOpenCheck, BriefcaseBusiness,
   Check, CheckCircle2, ChevronDown, Circle, Compass, FileText, Flame, Gauge,
   LogOut, MessageSquareText, PencilLine, Plus, Send, Sparkles, Target, TrendingUp,
-  UserRound, WandSparkles,
+  Upload, UserRound, WandSparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
 import { generateCareerRoadmap, matchJobDescription, reviewInterviewAnswer, reviewResume, type JobMatchResult } from "@/lib/career-ai.functions";
+import { extractResumeText } from "@/lib/resume-upload.functions";
 import type { Tables } from "@/integrations/supabase/types";
 import careerFocus from "@/assets/career-focus.jpg";
 
@@ -65,6 +66,8 @@ function PolarJobs() {
   const [jobDescription, setJobDescription] = useState("");
   const [matchBusy, setMatchBusy] = useState(false);
   const [matchResult, setMatchResult] = useState<JobMatchResult | null>(null);
+  const [resumeUploadBusy, setResumeUploadBusy] = useState(false);
+  const [resumeFileName, setResumeFileName] = useState("");
   const [answer, setAnswer] = useState("");
   const [interviewBusy, setInterviewBusy] = useState(false);
   const [latestFeedback, setLatestFeedback] = useState<{ score: number; feedback: string } | null>(null);
@@ -121,6 +124,7 @@ function PolarJobs() {
   const getResumeReview = useServerFn(reviewResume);
   const getJobMatch = useServerFn(matchJobDescription);
   const getInterviewReview = useServerFn(reviewInterviewAnswer);
+  const extractResume = useServerFn(extractResumeText);
 
   const saveProfile = async () => {
     if (!profile || !userId) return;
@@ -174,6 +178,21 @@ function PolarJobs() {
       toast.success("Your job match report is ready.");
     } catch (error) { toast.error(error instanceof Error ? error.message : "The job description couldn’t be scanned right now."); }
     finally { setMatchBusy(false); }
+  };
+
+  const uploadResumeFile = async (file: File) => {
+    setResumeUploadBusy(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const result = await extractResume({ data: form });
+      setResumeText(result.text);
+      setResumeFileName(result.fileName);
+      setMatchResult(null);
+      toast.success(`Added “${result.fileName}”${result.pages ? ` (${result.pages} pages)` : ""} to your resume box.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "That file couldn’t be read. Try pasting your resume text instead.");
+    } finally { setResumeUploadBusy(false); }
   };
 
   const submitInterviewAnswer = async () => {
@@ -257,7 +276,7 @@ function PolarJobs() {
           {workspace.isLoading ? <div className="py-20 text-center text-muted-foreground">Loading your career plan…</div> : workspace.error ? <div className="surface p-6"><p>We couldn’t open your saved career details.</p><Button className="mt-4" onClick={() => void workspace.refetch()}>Try again</Button></div> : !profile ? null : <>
             {section === "Overview" && <Overview profile={profile} tasks={tasks} interviews={interviews} completion={completion} completedTasks={completedTasks} greetingName={greetingName} setSection={setSection} createRoadmap={createRoadmap} roadmapBusy={roadmapBusy} toggleTask={toggleTask} />}
             {section === "My roadmap" && <Roadmap profile={profile} tasks={tasks} createRoadmap={createRoadmap} roadmapBusy={roadmapBusy} toggleTask={toggleTask} />}
-            {section === "Resume studio" && <ResumeStudio role={profile.target_role} resumeText={resumeText} setResumeText={(value) => { setResumeText(value); setMatchResult(null); }} feedback={resumeFeedback} busy={resumeBusy} submit={submitResume} tool={resumeTool} setTool={setResumeTool} jobDescription={jobDescription} setJobDescription={(value) => { setJobDescription(value); setMatchResult(null); }} matchResult={matchResult} matchBusy={matchBusy} submitMatch={submitJobMatch} />}
+            {section === "Resume studio" && <ResumeStudio role={profile.target_role} resumeText={resumeText} setResumeText={(value) => { setResumeText(value); setMatchResult(null); }} feedback={resumeFeedback} busy={resumeBusy} submit={submitResume} tool={resumeTool} setTool={setResumeTool} jobDescription={jobDescription} setJobDescription={(value) => { setJobDescription(value); setMatchResult(null); }} matchResult={matchResult} matchBusy={matchBusy} submitMatch={submitJobMatch} uploadBusy={resumeUploadBusy} onUploadFile={(file) => void uploadResumeFile(file)} fileName={resumeFileName} />}
             {section === "Interview practice" && <InterviewPractice question={currentQuestion} answer={answer} setAnswer={setAnswer} busy={interviewBusy} feedback={latestFeedback} submit={submitInterviewAnswer} sessions={interviews} />}
             {section === "Progress" && <ProgressView tasks={tasks} interviews={interviews} completion={completion} completedTasks={completedTasks} />}
             <section className="mt-8 border-t soft-divider pt-7">
