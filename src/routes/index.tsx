@@ -499,7 +499,8 @@ function buildQuestion(role: string, category: string) {
       `How do you like to receive feedback?`,
     ],
   };
-  const bank = banks[category] ?? banks.Behavioral;
+  const bank = banks[category] ?? banks["Behavioral"];
+  const list = bank && bank.length ? bank : ["Tell me about a time you solved a meaningful challenge."];
   const day = Math.floor(Date.now() / 86_400_000);
-  return bank[day % bank.length] ?? bank[0] ?? "Tell me about a time you solved a meaningful challenge.";
+  return list[day % list.length] ?? "Tell me about a time you solved a meaningful challenge.";
 }
