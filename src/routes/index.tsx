@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
-import { generateCareerRoadmap, matchJobDescription, reviewInterviewAnswer, reviewResume, type JobMatchResult } from "@/lib/career-ai.functions";
+import { generateCareerRoadmap, generateInterviewQuestion, matchJobDescription, reviewInterviewAnswer, reviewResume, type JobMatchResult } from "@/lib/career-ai.functions";
 import { extractResumeText } from "@/lib/resume-upload.functions";
 import type { Tables } from "@/integrations/supabase/types";
 import careerFocus from "@/assets/career-focus.jpg";
@@ -119,11 +119,17 @@ function PolarJobs() {
   const completedTasks = tasks.filter((task) => task.is_complete).length;
   const completion = tasks.length ? Math.round((completedTasks / tasks.length) * 100) : 0;
   const greetingName = profile?.full_name?.trim().split(" ")[0] || "there";
-  const currentQuestion = useMemo(() => buildQuestion(profile?.target_role || "your next role"), [profile?.target_role]);
+  const [questionCategory, setQuestionCategory] = useState("Behavioral");
+  const [activeQuestion, setActiveQuestion] = useState<string | null>(null);
+  const [questionTip, setQuestionTip] = useState("");
+  const [questionBusy, setQuestionBusy] = useState(false);
+  const [customQuestionDraft, setCustomQuestionDraft] = useState("");
+  const currentQuestion = activeQuestion ?? buildQuestion(profile?.target_role || "your next role", questionCategory);
   const generateRoadmap = useServerFn(generateCareerRoadmap);
   const getResumeReview = useServerFn(reviewResume);
   const getJobMatch = useServerFn(matchJobDescription);
   const getInterviewReview = useServerFn(reviewInterviewAnswer);
+  const getInterviewQuestion = useServerFn(generateInterviewQuestion);
   const extractResume = useServerFn(extractResumeText);
 
   const saveProfile = async () => {
