@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
-import { generateCareerRoadmap, matchJobDescription, reviewInterviewAnswer, reviewResume, type JobMatchResult } from "@/lib/career-ai.functions";
+import { generateCareerRoadmap, generateInterviewQuestion, matchJobDescription, reviewInterviewAnswer, reviewResume, type JobMatchResult } from "@/lib/career-ai.functions";
 import { extractResumeText } from "@/lib/resume-upload.functions";
 import type { Tables } from "@/integrations/supabase/types";
 import careerFocus from "@/assets/career-focus.jpg";
@@ -119,11 +119,17 @@ function PolarJobs() {
   const completedTasks = tasks.filter((task) => task.is_complete).length;
   const completion = tasks.length ? Math.round((completedTasks / tasks.length) * 100) : 0;
   const greetingName = profile?.full_name?.trim().split(" ")[0] || "there";
-  const currentQuestion = useMemo(() => buildQuestion(profile?.target_role || "your next role"), [profile?.target_role]);
+  const [questionCategory, setQuestionCategory] = useState("Behavioral");
+  const [activeQuestion, setActiveQuestion] = useState<string | null>(null);
+  const [questionTip, setQuestionTip] = useState("");
+  const [questionBusy, setQuestionBusy] = useState(false);
+  const [customQuestionDraft, setCustomQuestionDraft] = useState("");
+  const currentQuestion = activeQuestion ?? buildQuestion(profile?.target_role || "your next role", questionCategory);
   const generateRoadmap = useServerFn(generateCareerRoadmap);
   const getResumeReview = useServerFn(reviewResume);
   const getJobMatch = useServerFn(matchJobDescription);
   const getInterviewReview = useServerFn(reviewInterviewAnswer);
+  const getInterviewQuestion = useServerFn(generateInterviewQuestion);
   const extractResume = useServerFn(extractResumeText);
 
   const saveProfile = async () => {
@@ -209,6 +215,33 @@ function PolarJobs() {
     finally { setInterviewBusy(false); }
   };
 
+  const pickQuestionCategory = (category: string) => {
+    setQuestionCategory(category);
+    setActiveQuestion(null);
+    setQuestionTip("");
+  };
+
+  const generateQuestion = async () => {
+    if (!profile) return;
+    setQuestionBusy(true);
+    try {
+      const result = await getInterviewQuestion({ data: { role: profile.target_role || "your next role", category: questionCategory } });
+      setActiveQuestion(result.question);
+      setQuestionTip(result.tip);
+      if (result.category) setQuestionCategory(result.category);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "A fresh question couldn’t be generated just now.");
+    } finally { setQuestionBusy(false); }
+  };
+
+  const useCustomQuestion = () => {
+    const draft = customQuestionDraft.trim().slice(0, 800);
+    if (draft.length < 8) { toast.message("Write the question you want to practice first."); return; }
+    setActiveQuestion(draft);
+    setQuestionTip("");
+    setQuestionCategory("Your question");
+  };
+
   const handleAuth = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault(); setAuthBusy(true); setAuthMessage("");
     try {
@@ -277,7 +310,7 @@ function PolarJobs() {
             {section === "Overview" && <Overview profile={profile} tasks={tasks} interviews={interviews} completion={completion} completedTasks={completedTasks} greetingName={greetingName} setSection={setSection} createRoadmap={createRoadmap} roadmapBusy={roadmapBusy} toggleTask={toggleTask} />}
             {section === "My roadmap" && <Roadmap profile={profile} tasks={tasks} createRoadmap={createRoadmap} roadmapBusy={roadmapBusy} toggleTask={toggleTask} />}
             {section === "Resume studio" && <ResumeStudio role={profile.target_role} resumeText={resumeText} setResumeText={(value) => { setResumeText(value); setMatchResult(null); }} feedback={resumeFeedback} busy={resumeBusy} submit={submitResume} tool={resumeTool} setTool={setResumeTool} jobDescription={jobDescription} setJobDescription={(value) => { setJobDescription(value); setMatchResult(null); }} matchResult={matchResult} matchBusy={matchBusy} submitMatch={submitJobMatch} uploadBusy={resumeUploadBusy} onUploadFile={(file) => void uploadResumeFile(file)} fileName={resumeFileName} />}
-            {section === "Interview practice" && <InterviewPractice question={currentQuestion} answer={answer} setAnswer={setAnswer} busy={interviewBusy} feedback={latestFeedback} submit={submitInterviewAnswer} sessions={interviews} />}
+            {section === "Interview practice" && <InterviewPractice question={currentQuestion} tip={questionTip} category={questionCategory} answer={answer} setAnswer={setAnswer} busy={interviewBusy} feedback={latestFeedback} submit={submitInterviewAnswer} sessions={interviews} categories={INTERVIEW_CATEGORIES} onCategory={pickQuestionCategory} generateBusy={questionBusy} onGenerate={() => void generateQuestion()} customDraft={customQuestionDraft} setCustomDraft={setCustomQuestionDraft} onUseCustom={useCustomQuestion} />}
             {section === "Progress" && <ProgressView tasks={tasks} interviews={interviews} completion={completion} completedTasks={completedTasks} />}
             <section className="mt-8 border-t soft-divider pt-7">
               <div className="mb-5 flex items-end justify-between gap-3"><div><p className="eyebrow">Your foundation</p><h2 className="mt-2 text-xl font-semibold">Career profile</h2></div><Button size="sm" onClick={() => void saveProfile()}><Check className="size-4" /> Save changes</Button></div>
@@ -405,9 +438,16 @@ function JobMatchReport({ result }: { result: JobMatchResult }) {
   </section>;
 }
 
-function InterviewPractice({ question, answer, setAnswer, busy, feedback, submit, sessions }: { question: string; answer: string; setAnswer: (value: string) => void; busy: boolean; feedback: { score: number; feedback: string } | null; submit: () => void; sessions: Interview[] }) {
-  return <><PageTitle kicker="Practice room" title="Say it out loud. Then say it better." description="Build interview confidence with thoughtful practice and focused coaching." action={<div className="flex items-center gap-2 rounded-full bg-secondary px-3 py-1.5 text-xs text-muted-foreground"><MessageSquareText className="size-3.5" /> {sessions.length} saved reps</div>} />
-    <div className="grid gap-5 lg:grid-cols-[1fr_0.8fr]"><section className="surface p-5 sm:p-6"><div className="flex items-center justify-between"><p className="eyebrow">Your prompt</p><span className="rounded-full bg-accent px-2.5 py-1 text-[10px] text-primary">Behavioral</span></div><h2 className="mt-5 text-xl font-medium leading-8">{question}</h2><p className="mt-3 text-xs leading-5 text-muted-foreground">Consider the situation, the actions you took, and the outcome. A real example goes a long way.</p><Textarea className="mt-5 min-h-40 resize-y leading-6" value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder="Start with the situation…" /><Button className="mt-4" onClick={submit} disabled={busy || answer.trim().length < 20}>{busy ? "Listening closely…" : "Get feedback"}<Send className="size-4" /></Button></section>
+function InterviewPractice({ question, tip, category, answer, setAnswer, busy, feedback, submit, sessions, categories, onCategory, generateBusy, onGenerate, customDraft, setCustomDraft, onUseCustom }: { question: string; tip: string; category: string; answer: string; setAnswer: (value: string) => void; busy: boolean; feedback: { score: number; feedback: string } | null; submit: () => void; sessions: Interview[]; categories: readonly string[]; onCategory: (category: string) => void; generateBusy: boolean; onGenerate: () => void; customDraft: string; setCustomDraft: (value: string) => void; onUseCustom: () => void }) {
+  return <><PageTitle kicker="Practice room" title="Say it out loud. Then say it better." description="Pick a question style, generate a fresh prompt, or practice one you were actually asked." action={<div className="flex items-center gap-2 rounded-full bg-secondary px-3 py-1.5 text-xs text-muted-foreground"><MessageSquareText className="size-3.5" /> {sessions.length} saved reps</div>} />
+    <div className="grid gap-5 lg:grid-cols-[1fr_0.8fr]"><section className="surface p-5 sm:p-6">
+      <div className="flex flex-wrap items-center justify-between gap-3"><div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Question categories">{categories.map((item) => <button key={item} type="button" onClick={() => onCategory(item)} aria-pressed={item === category} className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${item === category ? "bg-accent text-primary" : "bg-secondary text-muted-foreground hover:text-foreground"}`}>{item}</button>)}</div><Button variant="secondary" size="sm" onClick={onGenerate} disabled={generateBusy}><Sparkles className="size-3.5" /> {generateBusy ? "Thinking…" : "New question"}</Button></div>
+      <p className="eyebrow mt-5">Your prompt</p>
+      <h2 className="mt-3 text-xl font-medium leading-8">{question}</h2>
+      {tip ? <p className="mt-3 text-xs leading-5 text-muted-foreground"><span className="text-primary">Strong answers show:</span> {tip}</p> : null}
+      <p className="mt-3 text-xs leading-5 text-muted-foreground">Consider the situation, the actions you took, and the outcome. A real example goes a long way.</p>
+      <div className="mt-5 flex flex-wrap items-center gap-2"><Input className="h-9 flex-1 basis-56" value={customDraft} onChange={(e) => setCustomDraft(e.target.value)} maxLength={800} placeholder="Practicing a question you were actually asked? Paste it here." aria-label="Your own interview question" /><Button variant="outline" size="sm" className="h-9" onClick={onUseCustom}>Use my question</Button></div>
+      <Textarea className="mt-4 min-h-40 resize-y leading-6" value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder="Start with the situation…" /><Button className="mt-4" onClick={submit} disabled={busy || answer.trim().length < 20}>{busy ? "Listening closely…" : "Get feedback"}<Send className="size-4" /></Button></section>
       <section className="surface-soft min-h-64 p-5 sm:p-6"><p className="eyebrow">Coaching notes</p>{feedback ? <><div className="mt-4 flex items-center gap-3"><span className="display-heading text-4xl">{feedback.score}</span><span className="text-xs text-muted-foreground">out of 100<br />for this answer</span><span className="ml-auto"><ScoreMark score={feedback.score} /></span></div><div className="feedback-copy mt-3 whitespace-pre-wrap text-sm leading-7">{feedback.feedback}</div></> : <div className="flex min-h-44 flex-col items-center justify-center text-center"><Award className="size-6 text-coral" /><p className="mt-3 text-sm font-medium">A safe place to find your words.</p><p className="mt-2 max-w-xs text-xs leading-5 text-muted-foreground">Share your answer and your coach will help you find the signal in your story.</p></div>}</section>
     </div>
   </>;
@@ -424,13 +464,43 @@ function ProgressView({ tasks, interviews, completion, completedTasks }: { tasks
   </>;
 }
 
-function buildQuestion(role: string) {
-  const bank = [
-    `Tell me about a time you had to solve a difficult problem relevant to ${role}. What did you do, and what happened?`,
-    `What’s a piece of work you’re proud of that shows how you’d thrive as ${role}?`,
-    `Tell me about a time you received feedback and used it to improve your work.`,
-    `What interests you about this next step, and what do you hope to bring to it?`,
-  ];
+const INTERVIEW_CATEGORIES = ["Behavioral", "Situational", "Technical", "Leadership", "Culture fit"] as const;
+
+function buildQuestion(role: string, category: string) {
+  const banks: Record<string, string[]> = {
+    Behavioral: [
+      `Tell me about a time you had to solve a difficult problem relevant to ${role}. What did you do, and what happened?`,
+      `What’s a piece of work you’re proud of that shows how you’d thrive as ${role}?`,
+      `Tell me about a time you received feedback and used it to improve your work.`,
+      `What interests you about this next step, and what do you hope to bring to it?`,
+    ],
+    Situational: [
+      `Imagine your first big deliverable as ${role} is at risk of slipping. How would you handle the first week?`,
+      `If a teammate disagreed with your approach on a ${role} project, how would you work through it?`,
+      `Two urgent requests land at once and you only have time for one. What do you do?`,
+      `How would you approach your first 30 days as ${role} without formal onboarding?`,
+    ],
+    Technical: [
+      `Walk me through how you’d judge whether a solution is strong enough for ${role}.`,
+      `Describe a recent decision you made in your craft, including the trade-offs you weighed.`,
+      `How do you decide when work is good enough versus when it needs another pass?`,
+      `Tell me about a tricky problem in your field that took real persistence to solve.`,
+    ],
+    Leadership: [
+      `Tell me about a time you influenced a decision without formal authority.`,
+      `Describe a moment you had to give a teammate difficult feedback.`,
+      `How have you helped a struggling teammate get back on track?`,
+      `Tell me about a time you said no to protect a commitment.`,
+    ],
+    "Culture fit": [
+      `What kind of environment brings out your best work?`,
+      `Why this role, and why now?`,
+      `What’s a working style you’ve learned to adapt to, and how?`,
+      `How do you like to receive feedback?`,
+    ],
+  };
+  const bank = banks[category] ?? banks["Behavioral"];
+  const list = bank && bank.length ? bank : ["Tell me about a time you solved a meaningful challenge."];
   const day = Math.floor(Date.now() / 86_400_000);
-  return bank[day % bank.length] ?? bank[0] ?? "Tell me about a time you solved a meaningful challenge.";
+  return list[day % list.length] ?? "Tell me about a time you solved a meaningful challenge.";
 }

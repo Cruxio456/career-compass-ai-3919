@@ -150,6 +150,34 @@ const interviewFn = createServerFn({ method: "POST" })
     }
   });
 
+const interviewQuestionFn = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) => {
+    if (!input || typeof input !== "object") throw new Error("Pick a question category first.");
+    const value = input as Record<string, unknown>;
+    const role = typeof value["role"] === "string" ? value["role"].trim().slice(0, 140) : "";
+    const category = typeof value["category"] === "string" ? value["category"].trim().slice(0, 60) : "";
+    if (!role) throw new Error("Add a target role so your practice questions fit it.");
+    return { role, category };
+  })
+  .handler(async ({ data }) => {
+    const response = await generate(
+      new Request("https://polar-jobs.local/interview-question", { method: "POST" }),
+      "You are an experienced interview coach. Generate ONE realistic interview question for the named target role in the named category. Make it specific to the role and something a real interviewer would ask. Return only valid JSON with an object containing: question (string), tip (one short sentence on what a strong answer demonstrates), and category (the category you used, one of Behavioral, Situational, Technical, Leadership, Culture fit). No markdown fences.",
+      JSON.stringify({ targetRole: data.role, category: data.category || "Behavioral" }),
+    );
+    let parsed: unknown;
+    try { parsed = JSON.parse(response); } catch { parsed = null; }
+    const value = parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : null;
+    const question = value && typeof value["question"] === "string" ? value["question"].trim().slice(0, 800) : "";
+    if (!question) throw new Error("A fresh question couldn’t be generated. Please try again.");
+    return {
+      question,
+      tip: value && typeof value["tip"] === "string" ? value["tip"].trim().slice(0, 240) : "",
+      category: value && typeof value["category"] === "string" ? value["category"].trim().slice(0, 60) : "",
+    };
+  });
+
 const jobDescriptionMatchFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) => {
@@ -177,4 +205,5 @@ const jobDescriptionMatchFn = createServerFn({ method: "POST" })
 export const generateCareerRoadmap = roadmapFn;
 export const reviewResume = resumeFn;
 export const reviewInterviewAnswer = interviewFn;
+export const generateInterviewQuestion = interviewQuestionFn;
 export const matchJobDescription = jobDescriptionMatchFn;

@@ -5,4 +5,5 @@
 - [x] Build Polar Jobs dashboard and account flow
 - [x] Add AI career plan, resume feedback, and interview coaching
 - [x] Verify the preview and build results
-- [ ] Add an AI job-description matcher with a resume match score, missing priority keywords, experience gaps, and actionable recommendations
+- [x] Add an AI job-description matcher with a resume match score, missing priority keywords, experience gaps, and actionable recommendations
+- [x] Add interview question categories, custom question input, and an AI "New question" generator
