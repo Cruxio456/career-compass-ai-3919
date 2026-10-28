@@ -215,6 +215,33 @@ function PolarJobs() {
     finally { setInterviewBusy(false); }
   };
 
+  const pickQuestionCategory = (category: string) => {
+    setQuestionCategory(category);
+    setActiveQuestion(null);
+    setQuestionTip("");
+  };
+
+  const generateQuestion = async () => {
+    if (!profile) return;
+    setQuestionBusy(true);
+    try {
+      const result = await getInterviewQuestion({ data: { role: profile.target_role || "your next role", category: questionCategory } });
+      setActiveQuestion(result.question);
+      setQuestionTip(result.tip);
+      if (result.category) setQuestionCategory(result.category);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "A fresh question couldn’t be generated just now.");
+    } finally { setQuestionBusy(false); }
+  };
+
+  const useCustomQuestion = () => {
+    const draft = customQuestionDraft.trim().slice(0, 800);
+    if (draft.length < 8) { toast.message("Write the question you want to practice first."); return; }
+    setActiveQuestion(draft);
+    setQuestionTip("");
+    setQuestionCategory("Your question");
+  };
+
   const handleAuth = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault(); setAuthBusy(true); setAuthMessage("");
     try {
