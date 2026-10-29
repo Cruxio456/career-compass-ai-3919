@@ -160,9 +160,19 @@ function PolarJobs() {
   };
 
   const toggleTask = async (task: Task) => {
+    if (!userId) return;
+    const key = ["polar-workspace", userId] as const;
+    const previous = queryClient.getQueryData(key);
+    queryClient.setQueryData(key, (old: typeof workspace.data) =>
+      old ? { ...old, tasks: old.tasks.map((t) => (t.id === task.id ? { ...t, is_complete: !t.is_complete } : t)) } : old,
+    );
     const { error } = await supabase.from("roadmap_tasks").update({ is_complete: !task.is_complete }).eq("id", task.id);
-    if (error) toast.error("That step couldn’t be updated.");
-    else await queryClient.invalidateQueries({ queryKey: ["polar-workspace", userId] });
+    if (error) {
+      queryClient.setQueryData(key, previous);
+      toast.error("That step couldn’t be updated.");
+      return;
+    }
+    await queryClient.invalidateQueries({ queryKey: key });
   };
 
   const submitResume = async () => {
