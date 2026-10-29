@@ -7,3 +7,4 @@
 - [x] Verify the preview and build results
 - [x] Add an AI job-description matcher with a resume match score, missing priority keywords, experience gaps, and actionable recommendations
 - [x] Add interview question categories, custom question input, and an AI "New question" generator
+- [x] Make roadmap task checkmarks update instantly with optimistic cache updates
