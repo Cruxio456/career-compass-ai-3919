@@ -282,7 +282,32 @@ function PolarJobs() {
     if (error) toast.error("Couldn’t sign out. Please try again.");
   };
 
-  if (!authReady) return <div className="flex min-h-screen items-center justify-center bg-background text-muted-foreground"><Sparkles className="mr-2 size-4 animate-pulse" /> Opening your workspace</div>;
+if (!authReady) {
+  return (
+    <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
+      <style>{`
+        @keyframes polarSlide {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(200%); }
+        }
+      `}</style>
+      <div className="flex w-24 flex-col items-center gap-3.5">
+        <img
+          src="/Polar.svg"
+          alt="Polar Jobs"
+          className="size-24 object-contain select-none"
+        />
+        <div className="relative h-1.5 w-full overflow-hidden rounded-full bg-muted">
+          <div
+            className="h-full w-1/2 rounded-full bg-primary"
+            style={{ animation: "polarSlide 1.2s ease-in-out infinite" }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
   if (!userId) return <AuthScreen mode={authMode} setMode={setAuthMode} name={fullName} setName={setFullName} email={authEmail} setEmail={setAuthEmail} password={password} setPassword={setPassword} busy={authBusy} message={authMessage} onSubmit={handleAuth} onGoogle={signInGoogle} />;
 
   const updateProfile = (key: keyof Profile, value: string | number | string[]) => {
