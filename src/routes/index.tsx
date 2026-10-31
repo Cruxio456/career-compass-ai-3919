@@ -56,13 +56,13 @@ function PolarBrandLogo() {
       />
       <div className="flex items-baseline leading-none">
         <span
-          className="text-2xl font-semibold tracking-tight text-foreground"
+          className="text-2xl font-semibold tracking-tight text-foreground text-white"
           style={{ fontFamily: "'Edu VIC WA NT Beginner', cursive" }}
         >
           Polar
         </span>
         <span
-          className="ml-0.5 text-base font-medium tracking-normal text-foreground/80"
+          className="ml-0.5 text-base font-medium tracking-normal text-foreground/80 text-white"
           style={{ fontFamily: "'Google Sans Flex', sans-serif" }}
         >
           Jobs
@@ -345,7 +345,7 @@ if (!authReady) {
 return (
   <div className="app-shell min-h-screen text-foreground pb-12">
     {/* 1. Sticky Horizontal Topbar */}
-    <header className="sticky top-0 z-40 border-b border-border/40 bg-background/95 backdrop-blur-md px-4 py-3 sm:px-6">
+    <header className="sticky top-0 z-40 border-b border-border/40 bg-[#8c76c6] px-4 py-3 sm:px-6">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-4">
         
         {/* Left: Polar Bear Logo + Brand Title */}
