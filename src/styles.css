@@ -293,3 +293,32 @@
 .feedback-copy li { 
   margin: 0.4rem 0; 
 }
+
+/* Page Scrollbar / Slider themed to lavender */
+html {
+  /* Modern standard property (Firefox & modern browsers) */
+  scrollbar-color: #8c76c6 var(--surface-soft);
+  scrollbar-width: thin;
+}
+
+/* Chrome, Edge, Safari, Opera */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--surface-soft);
+  border-radius: 9999px;
+  margin: 8px 0;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #8c76c6;
+  border-radius: 9999px;
+  border: 2px solid var(--surface-soft); /* Creates an inset floating pill effect */
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.55 0.14 295); /* Slightly deeper lavender when hovered */
+}
