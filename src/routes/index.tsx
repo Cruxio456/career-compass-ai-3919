@@ -345,7 +345,7 @@ if (!authReady) {
 return (
   <div className="app-shell min-h-screen text-foreground pb-12">
     {/* 1. Sticky Horizontal Topbar */}
-    <header className="sticky top-0 z-40 border-b border-border/40 bg-[#8c76c6] px-4 py-3 sm:px-6">
+    <header className="sticky top-0 z-40 border-b border-border/40 bg-[#8c76c6] px-4 py-3 sm:px-6 rounded-2xl">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-4">
         
         {/* Left: Polar Bear Logo + Brand Title */}
