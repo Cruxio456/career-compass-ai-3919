@@ -522,15 +522,63 @@ function PageTitle({ kicker, title, description, action }: { kicker: string; tit
 function Overview({ profile, tasks, interviews, completion, completedTasks, greetingName, setSection, createRoadmap, roadmapBusy, toggleTask }: { profile: Profile; tasks: Task[]; interviews: Interview[]; completion: number; completedTasks: number; greetingName: string; setSection: (section: Section) => void; createRoadmap: () => void; roadmapBusy: boolean; toggleTask: (task: Task) => void }) {
   const targetRole = profile.target_role || "your next chapter";
   const upcoming = tasks.find((task) => !task.is_complete);
+  const scoreAverage = interviews.length
+  ? Math.round(interviews.reduce((sum, item) => sum + (item.score ?? 0), 0) / interviews.length)
+  : 0;
   return <>
     <div className="mb-7 flex flex-wrap items-end justify-between gap-4"><div><p className="eyebrow">Your career, in motion</p><h1 className="display-heading mt-2 text-3xl sm:text-[34px]">Good to have you here, {greetingName}.</h1><p className="mt-2 text-sm text-muted-foreground">A little momentum adds up. Let’s move toward <span className="text-foreground">{targetRole}</span>.</p></div><Button onClick={() => setSection("Resume studio")}><WandSparkles className="size-4" /> Tune my resume</Button></div>
     <div className="grid gap-4 md:grid-cols-[1.45fr_0.75fr]">
       <section className="surface relative overflow-hidden p-5 sm:p-6"><div className="flex items-start justify-between gap-5"><div><p className="eyebrow">Your focus this week</p><h2 className="mt-2 max-w-lg text-xl font-semibold">{upcoming?.title || `Build a strong foundation for ${targetRole}`}</h2><p className="mt-2 max-w-lg text-sm leading-6 text-muted-foreground">{upcoming?.description || "Start with a personal roadmap, then keep your small career steps moving."}</p></div><div className="hidden size-11 shrink-0 items-center justify-center rounded-full bg-accent text-primary sm:flex"><Target className="size-5" /></div></div><div className="mt-6 flex flex-wrap items-center gap-3"><Button variant="secondary" size="sm" onClick={() => upcoming ? void toggleTask(upcoming) : createRoadmap()} disabled={roadmapBusy}>{upcoming ? "Mark done" : roadmapBusy ? "Building your roadmap…" : "Build my roadmap"}<ArrowRight className="size-4" /></Button><span className="text-xs text-muted-foreground">{profile.weekly_hours} hours set aside each week</span></div></section>
       <section className="surface p-5 sm:p-6"><div className="flex items-center justify-between"><p className="eyebrow">Roadmap progress</p><Gauge className="size-4 text-primary" /></div><div className="mt-5 flex items-baseline gap-2"><span className="display-heading text-4xl">{completion}%</span><span className="text-xs text-muted-foreground">complete</span></div><div className="progress-track mt-4"><div className="progress-fill" style={{ width: `${completion}%` }} /></div><p className="mt-3 text-xs text-muted-foreground">{completedTasks} of {tasks.length} steps checked off</p></section>
     </div>
-    <div className="mt-4 grid gap-4 sm:grid-cols-3"><Metric icon={CheckCircle2} label="Steps completed" value={`${completedTasks}`} detail={tasks.length ? `of ${tasks.length} in your plan` : "Start a personal plan"} tone="ice" /><Metric icon={MessageSquareText} label="Interview reps" value={`${interviews.length}`} detail={interviews.length ? "Answers reviewed by your coach" : "Your first practice is one click away"} tone="coral" /><Metric icon={Flame} label="Hours this week" value={`${profile.weekly_hours}`} detail="Reserved for your next move" tone="lime" /></div>
+    <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <Metric icon={CheckCircle2} label="Steps completed" value={`${completedTasks}`} detail={tasks.length ? `of ${tasks.length} in your plan` : "Start a personal plan"} tone="ice" />
+      <Metric icon={MessageSquareText} label="Interview reps" value={`${interviews.length}`} detail={interviews.length ? "Answers reviewed by your coach" : "Your first practice is one click away"} tone="coral" />
+      <Metric icon={Award} label="Avg. answer score" value={interviews.length ? `${scoreAverage}` : "—"} detail={interviews.length ? "Across saved answers" : "Complete one practice session"} tone="ice" />
+      <Metric icon={Flame} label="Hours this week" value={`${profile.weekly_hours}`} detail="Reserved for your next move" tone="lime" />
+    </div>
     <div className="mt-8 flex items-center justify-between gap-3"><div><p className="eyebrow">One step at a time</p><h2 className="mt-2 text-lg font-semibold">Your next milestone</h2></div><Button variant="ghost" size="sm" onClick={() => setSection("My roadmap")}>View roadmap <ArrowRight className="size-4" /></Button></div>
     {tasks.length ? <div className="mt-4 divide-y divide-border overflow-hidden rounded-2xl border border-border">{tasks.filter((task) => !task.is_complete).slice(0, 3).map((task) => <TaskRow key={task.id} task={task} onToggle={toggleTask} />)}</div> : <div className="surface-soft mt-4 flex flex-wrap items-center justify-between gap-4 p-5"><div><p className="font-medium">Start with a roadmap made for you</p><p className="mt-1 text-sm text-muted-foreground">Tell Polar Jobs where you want to go, and get a set of practical next steps.</p></div><Button onClick={createRoadmap} disabled={roadmapBusy}><Sparkles className="size-4" /> {roadmapBusy ? "Thinking…" : "Create roadmap"}</Button></div>}
+    <div className="mt-8 flex items-center justify-between gap-3">
+  <div>
+    <p className="eyebrow">Recent practice</p>
+    <h2 className="mt-2 text-lg font-semibold">Interview reps</h2>
+  </div>
+  <Button variant="ghost" size="sm" onClick={() => setSection("Interview practice")}>
+    Practice room <ArrowRight className="size-4" />
+  </Button>
+</div>
+
+{interviews.length ? (
+  <div className="mt-4 divide-y divide-border overflow-hidden rounded-2xl border border-border">
+    {interviews.slice(0, 3).map((session) => (
+      <div key={session.id} className="flex items-center gap-4 bg-surface-raised p-4">
+        <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-secondary text-primary">
+          <MessageSquareText className="size-4" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium">{session.question}</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {new Date(session.created_at).toLocaleDateString()}
+          </p>
+        </div>
+        <p className="display-heading text-xl">{session.score ?? "—"}</p>
+      </div>
+    ))}
+  </div>
+) : (
+  <div className="surface-soft mt-4 flex flex-wrap items-center justify-between gap-4 p-5">
+    <div>
+      <p className="font-medium">No interview practice yet</p>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Practice questions tailored to your target role and get instant coach feedback.
+      </p>
+    </div>
+    <Button onClick={() => setSection("Interview practice")}>
+      <MessageSquareText className="size-4" /> Start practice
+    </Button>
+  </div>
+)}
   </>;
 }
 
