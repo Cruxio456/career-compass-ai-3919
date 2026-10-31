@@ -48,11 +48,11 @@ export const Route = createFileRoute("/")({
 
 function PolarBrandLogo() {
   return (
-    <div className="flex items-center gap-2.5 select-none">
+    <div className="flex items-center gap-2 select-none">
       <img
         src="/Polar.svg"
         alt="Polar bear logo"
-        className="size-9 object-contain"
+        className="h-7 w-auto object-contain"
       />
       <div className="flex items-baseline leading-none">
         <span
