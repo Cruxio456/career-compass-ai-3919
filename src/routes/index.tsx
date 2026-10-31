@@ -22,14 +22,13 @@ import careerFocus from "@/assets/career-focus.jpg";
 type Profile = Tables<"profiles">;
 type Task = Tables<"roadmap_tasks">;
 type Interview = Tables<"interview_sessions">;
-type Section = "Overview" | "My roadmap" | "Resume studio" | "Interview practice" | "Progress";
+type Section = "Overview" | "My roadmap" | "Resume studio" | "Interview practice";
 
 const navItems: { label: Section; icon: typeof Compass }[] = [
   { label: "Overview", icon: Compass },
   { label: "My roadmap", icon: BookOpenCheck },
   { label: "Resume studio", icon: FileText },
   { label: "Interview practice", icon: MessageSquareText },
-  { label: "Progress", icon: TrendingUp },
 ];
 
 export const Route = createFileRoute("/")({
@@ -469,9 +468,6 @@ return (
           {section === "Interview practice" && (
             <InterviewPractice question={currentQuestion} tip={questionTip} category={questionCategory} answer={answer} setAnswer={setAnswer} busy={interviewBusy} feedback={latestFeedback} submit={submitInterviewAnswer} sessions={interviews} categories={INTERVIEW_CATEGORIES} onCategory={pickQuestionCategory} generateBusy={questionBusy} onGenerate={() => void generateQuestion()} customDraft={customQuestionDraft} setCustomDraft={setCustomQuestionDraft} onUseCustom={useCustomQuestion} />
           )}
-          {section === "Progress" && (
-            <ProgressView tasks={tasks} interviews={interviews} completion={completion} completedTasks={completedTasks} />
-          )}
 
           {/* Career Profile settings form remains intact at the bottom */}
           <section className="mt-8 border-t soft-divider pt-7">
@@ -658,15 +654,6 @@ function InterviewPractice({ question, tip, category, answer, setAnswer, busy, f
 }
 
 function ScoreMark({ score }: { score: number }) { return score >= 80 ? <span className="rounded-full bg-secondary px-2.5 py-1 text-[10px] text-lime">Strong</span> : score >= 60 ? <span className="rounded-full bg-secondary px-2.5 py-1 text-[10px] text-ice">Taking shape</span> : <span className="rounded-full bg-secondary px-2.5 py-1 text-[10px] text-coral">Getting started</span>; }
-
-function ProgressView({ tasks, interviews, completion, completedTasks }: { tasks: Task[]; interviews: Interview[]; completion: number; completedTasks: number }) {
-  const scoreAverage = interviews.length ? Math.round(interviews.reduce((sum, item) => sum + (item.score ?? 0), 0) / interviews.length) : 0;
-  return <><PageTitle kicker="Your momentum" title="Progress you can feel." description="Every checked box and practice rep is a real step forward." />
-    <div className="grid gap-4 sm:grid-cols-3"><Metric icon={CheckCircle2} label="Roadmap completion" value={`${completion}%`} detail={`${completedTasks} of ${tasks.length} milestones`} tone="ice" /><Metric icon={MessageSquareText} label="Interview sessions" value={`${interviews.length}`} detail="Practice reps saved" tone="coral" /><Metric icon={Award} label="Average answer score" value={interviews.length ? `${scoreAverage}` : "—"} detail={interviews.length ? "Across your saved practice" : "Practice once to get your first score"} tone="lime" /></div>
-    <section className="mt-8"><div className="mb-4"><p className="eyebrow">Your milestones</p><h2 className="mt-2 text-lg font-semibold">Small steps, in order</h2></div>{tasks.length ? <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border">{tasks.map((task) => <TaskRow key={task.id} task={task} onToggle={() => undefined} />)}</div> : <div className="surface-soft p-5 text-sm text-muted-foreground">Create your roadmap to begin tracking career milestones.</div>}</section>
-    <section className="mt-8"><div className="mb-4"><p className="eyebrow">Recent practice</p><h2 className="mt-2 text-lg font-semibold">Interview reps</h2></div>{interviews.length ? <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border">{interviews.slice(0, 5).map((session) => <div key={session.id} className="flex items-center gap-4 bg-surface-raised p-4"><div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-secondary text-primary"><MessageSquareText className="size-4" /></div><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{session.question}</p><p className="mt-1 text-xs text-muted-foreground">{new Date(session.created_at).toLocaleDateString()}</p></div><p className="display-heading text-xl">{session.score ?? "—"}</p></div>)}</div> : <div className="surface-soft p-5 text-sm text-muted-foreground">Your interview practice and coach feedback will appear here.</div>}</section>
-  </>;
-}
 
 const INTERVIEW_CATEGORIES = ["Behavioral", "Situational", "Technical", "Leadership", "Culture fit"] as const;
 
