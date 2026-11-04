@@ -396,17 +396,40 @@ return (
                 className="fixed inset-0 z-40" 
                 onClick={() => setAccountMenuOpen(false)} 
               />
-              <div className="absolute right-0 mt-2 z-50 w-64 rounded-2xl border border-border bg-card p-4 shadow-xl">
+              <div className="absolute right-0 mt-2 z-50 w-80 rounded-2xl border border-border bg-card p-4 shadow-xl">
                 <div className="mb-3 border-b border-border pb-3">
-                  <p className="truncate text-sm font-semibold text-foreground">
-                    {profile?.full_name || "Polar Explorer"}
-                  </p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {userEmail}
-                  </p>
-                  <span className="mt-2 inline-block rounded-full bg-secondary px-2.5 py-0.5 text-[11px] font-medium text-foreground">
-                    {profile?.target_role || "Career profile"}
-                  </span>
+                  <p className="truncate text-xs text-muted-foreground">{userEmail}</p>
+                  <div className="mt-3 space-y-2">
+                    <label className="block text-[11px] font-medium text-muted-foreground">Name
+                      <Input className="mt-1 h-8 text-sm" value={profile?.full_name ?? ""} onChange={(e) => updateProfile("full_name", e.target.value)} placeholder="Your name" />
+                    </label>
+                    <label className="block text-[11px] font-medium text-muted-foreground">Target job
+                      <Input className="mt-1 h-8 text-sm" value={profile?.target_role ?? ""} onChange={(e) => updateProfile("target_role", e.target.value)} placeholder="e.g. Product Designer" />
+                    </label>
+                    <div className="text-[11px] font-medium text-muted-foreground">Known skills
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {(profile?.skills ?? []).map((skill) => (
+                          <span key={skill} className="inline-flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-[11px] text-foreground">
+                            {skill}
+                            <button type="button" aria-label={`Remove ${skill}`} className="text-muted-foreground hover:text-destructive" onClick={() => updateProfile("skills", (profile?.skills ?? []).filter((s) => s !== skill))}>×</button>
+                          </span>
+                        ))}
+                      </div>
+                      <Input
+                        className="mt-1 h-8 text-sm"
+                        placeholder="Type a skill and press Enter"
+                        onKeyDown={(e) => {
+                          if (e.key !== "Enter" && e.key !== ",") return;
+                          e.preventDefault();
+                          const value = e.currentTarget.value.trim();
+                          const current = profile?.skills ?? [];
+                          if (value && !current.some((s) => s.toLowerCase() === value.toLowerCase())) updateProfile("skills", [...current, value].slice(0, 30));
+                          e.currentTarget.value = "";
+                        }}
+                      />
+                    </div>
+                    <Button size="sm" className="w-full" onClick={() => void saveProfile()}>Save account info</Button>
+                  </div>
                 </div>
                 <Button
                   variant="ghost"
