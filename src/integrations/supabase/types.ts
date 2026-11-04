@@ -91,6 +91,7 @@ export type Database = {
           due_date: string | null
           id: string
           is_complete: boolean
+          parent_id: string | null
           sort_order: number
           title: string
           user_id: string
@@ -103,6 +104,7 @@ export type Database = {
           due_date?: string | null
           id?: string
           is_complete?: boolean
+          parent_id?: string | null
           sort_order?: number
           title: string
           user_id: string
@@ -115,12 +117,21 @@ export type Database = {
           due_date?: string | null
           id?: string
           is_complete?: boolean
+          parent_id?: string | null
           sort_order?: number
           title?: string
           user_id?: string
           week_number?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "roadmap_tasks_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "roadmap_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
