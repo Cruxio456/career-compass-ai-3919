@@ -201,23 +201,6 @@ function PolarJobs() {
     await queryClient.invalidateQueries({ queryKey: key });
   };
 
-  const addSubtask = async (parent: Task, title: string) => {
-    if (!userId) return;
-    const clean = title.trim().slice(0, 140);
-    if (!clean) return;
-    const key = ["polar-workspace", userId] as const;
-    const previous = queryClient.getQueryData(key);
-    const siblings = tasks.filter((t) => t.parent_id === parent.id);
-    const optimistic: Task = {
-      ...parent,
-      id: crypto.randomUUID(),
-      parent_id: parent.id,
-      title: clean,
-      description: "",
-      is_complete: false,
-      sort_order: siblings.length + 1,
-      created_at: new Date().toISOString(),
-    };
     queryClient.setQueryData(key, (old: typeof workspace.data) =>
       old ? { ...old, tasks: [...old.tasks, optimistic] } : old,
     );
@@ -233,22 +216,6 @@ function PolarJobs() {
     if (error) {
       queryClient.setQueryData(key, previous);
       toast.error("That subtask couldn’t be added.");
-      return;
-    }
-    await queryClient.invalidateQueries({ queryKey: key });
-  };
-
-  const deleteSubtask = async (task: Task) => {
-    if (!userId) return;
-    const key = ["polar-workspace", userId] as const;
-    const previous = queryClient.getQueryData(key);
-    queryClient.setQueryData(key, (old: typeof workspace.data) =>
-      old ? { ...old, tasks: old.tasks.filter((t) => t.id !== task.id) } : old,
-    );
-    const { error } = await supabase.from("roadmap_tasks").delete().eq("id", task.id);
-    if (error) {
-      queryClient.setQueryData(key, previous);
-      toast.error("That subtask couldn’t be removed.");
       return;
     }
     await queryClient.invalidateQueries({ queryKey: key });
@@ -536,7 +503,7 @@ return (
             <Overview profile={profile} tasks={tasks} interviews={interviews} completion={completion} completedTasks={completedTasks} greetingName={greetingName} setSection={setSection} createRoadmap={createRoadmap} roadmapBusy={roadmapBusy} toggleTask={toggleTask} />
           )}
           {section === "My roadmap" && (
-            <Roadmap profile={profile} tasks={tasks} createRoadmap={createRoadmap} roadmapBusy={roadmapBusy} toggleTask={toggleTask} addSubtask={addSubtask} deleteSubtask={deleteSubtask} />
+            <Roadmap profile={profile} tasks={tasks} createRoadmap={createRoadmap} roadmapBusy={roadmapBusy} toggleTask={toggleTask} />
           )}
           {section === "Resume studio" && (
             <ResumeStudio role={profile.target_role} resumeText={resumeText} setResumeText={(value) => { setResumeText(value); setMatchResult(null); }} feedback={resumeFeedback} busy={resumeBusy} submit={submitResume} tool={resumeTool} setTool={setResumeTool} jobDescription={jobDescription} setJobDescription={(value) => { setJobDescription(value); setMatchResult(null); }} matchResult={matchResult} matchBusy={matchBusy} submitMatch={submitJobMatch} uploadBusy={resumeUploadBusy} onUploadFile={(file) => void uploadResumeFile(file)} fileName={resumeFileName} />
@@ -662,21 +629,20 @@ function TaskRow({ task, onToggle }: { task: Task; onToggle: (task: Task) => voi
   return <div className="flex items-start gap-3 bg-surface-raised p-4"><Button variant="ghost" size="icon" aria-label={task.is_complete ? "Mark step incomplete" : "Mark step complete"} onClick={() => void onToggle(task)}>{task.is_complete ? <CheckCircle2 className="size-5 text-lime" /> : <Circle className="size-5 text-muted-foreground" />}</Button><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><p className={`text-sm font-medium ${task.is_complete ? "task-done" : ""}`}>{task.title}</p><span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] text-muted-foreground">Week {task.week_number}</span></div><p className="mt-1 text-xs leading-5 text-muted-foreground">{task.description}</p></div><span className="hidden text-xs text-muted-foreground sm:block">{task.category}</span></div>;
 }
 
-function Roadmap({ profile, tasks, createRoadmap, roadmapBusy, toggleTask, addSubtask, deleteSubtask }: { profile: Profile; tasks: Task[]; createRoadmap: () => void; roadmapBusy: boolean; toggleTask: (task: Task) => void; addSubtask: (parent: Task, title: string) => Promise<void>; deleteSubtask: (task: Task) => Promise<void> }) {
+function Roadmap({
+  profile,
+  tasks,
+  createRoadmap,
+  roadmapBusy,
+  toggleTask,
+}: {
+  profile: Profile;
+  tasks: Task[];
+  createRoadmap: () => void;
+  roadmapBusy: boolean;
+  toggleTask: (task: Task) => void;
+}) {
   const weeks = [...new Set(tasks.map((task) => task.week_number))].sort((a, b) => a - b);
-  const [addingFor, setAddingFor] = useState<string | null>(null);
-  const [subtaskDraft, setSubtaskDraft] = useState("");
-  const [subtaskBusyFor, setSubtaskBusyFor] = useState<string | null>(null);
-  const submitSubtask = async (parent: Task) => {
-    const title = subtaskDraft.trim();
-    if (!title) return;
-    setSubtaskBusyFor(parent.id);
-    try {
-      await addSubtask(parent, title);
-      setSubtaskDraft("");
-      setAddingFor(null);
-    } finally { setSubtaskBusyFor(null); }
-  };
   return <><PageTitle kicker="Your next chapter" title="My roadmap" description={profile.target_role ? `Your practical plan for moving toward ${profile.target_role}.` : "A practical plan built around the role you want and time you can set aside."} action={<Button onClick={createRoadmap} disabled={roadmapBusy}><Sparkles className="size-4" /> {roadmapBusy ? "Building…" : tasks.length ? "Refresh roadmap" : "Create roadmap"}</Button>} />
     {tasks.length ? <div className="space-y-6">{weeks.map((week) => {
       const weekSteps = tasks.filter((task) => task.week_number === week);
@@ -690,10 +656,6 @@ function Roadmap({ profile, tasks, createRoadmap, roadmapBusy, toggleTask, addSu
       })}</div></section>;
     })}</div> : <div className="surface-soft p-6"><Sparkles className="size-5 text-primary" /><h2 className="mt-4 font-semibold">A path, shaped around you</h2><p className="mt-2 max-w-xl text-sm leading-6 text-muted-foreground">Your coach will turn your goal, current skills, and weekly time into a set of meaningful milestones. Add a target role in your profile to begin.</p><Button className="mt-5" onClick={createRoadmap} disabled={roadmapBusy}>{roadmapBusy ? "Building your plan…" : "Create my roadmap"} <ArrowRight className="size-4" /></Button></div>}
   </>;
-}
-
-function SubtaskRow({ task, onToggle, onDelete }: { task: Task; onToggle: (task: Task) => void; onDelete: (task: Task) => void }) {
-  return <div className="flex items-center gap-2 border-t border-border/70 bg-surface-raised/50 py-2 pl-10 pr-3"><Button variant="ghost" size="icon" className="size-7" aria-label={task.is_complete ? "Mark subtask incomplete" : "Mark subtask complete"} onClick={() => void onToggle(task)}>{task.is_complete ? <CheckCircle2 className="size-4 text-lime" /> : <Circle className="size-4 text-muted-foreground" />}</Button><p className={`min-w-0 flex-1 truncate text-xs font-medium ${task.is_complete ? "task-done" : ""}`}>{task.title}</p><Button variant="ghost" size="icon" className="size-7" aria-label="Remove subtask" onClick={() => void onDelete(task)}><X className="size-3.5 text-muted-foreground" /></Button></div>;
 }
 
 function ResumeStudio({ role, resumeText, setResumeText, feedback, busy, submit, tool, setTool, jobDescription, setJobDescription, matchResult, matchBusy, submitMatch, uploadBusy, onUploadFile, fileName }: { role: string; resumeText: string; setResumeText: (value: string) => void; feedback: string; busy: boolean; submit: () => void; tool: "feedback" | "matcher"; setTool: (tool: "feedback" | "matcher") => void; jobDescription: string; setJobDescription: (value: string) => void; matchResult: JobMatchResult | null; matchBusy: boolean; submitMatch: () => void; uploadBusy: boolean; onUploadFile: (file: File) => void; fileName: string }) {
