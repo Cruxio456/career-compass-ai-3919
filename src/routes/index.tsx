@@ -593,7 +593,7 @@ function PageTitle({ kicker, title, description, action }: { kicker: string; tit
 
 function Overview({ profile, tasks, interviews, completion, completedTasks, greetingName, setSection, createRoadmap, roadmapBusy, toggleTask }: { profile: Profile; tasks: Task[]; interviews: Interview[]; completion: number; completedTasks: number; greetingName: string; setSection: (section: Section) => void; createRoadmap: () => void; roadmapBusy: boolean; toggleTask: (task: Task) => void }) {
   const targetRole = profile.target_role || "your next chapter";
-  const upcoming = tasks.find((task) => !task.is_complete);
+  const upcoming = tasks.find((task) => !task.is_complete && task.parent_id === null);
   const scoreAverage = interviews.length
   ? Math.round(interviews.reduce((sum, item) => sum + (item.score ?? 0), 0) / interviews.length)
   : 0;
@@ -610,7 +610,7 @@ function Overview({ profile, tasks, interviews, completion, completedTasks, gree
       <Metric icon={Flame} label="Hours this week" value={`${profile.weekly_hours}`} detail="Reserved for your next move" tone="lime" />
     </div>
     <div className="mt-8 flex items-center justify-between gap-3"><div><p className="eyebrow">One step at a time</p><h2 className="mt-2 text-lg font-semibold">Your next milestone</h2></div><Button variant="ghost" size="sm" onClick={() => setSection("My roadmap")}>View roadmap <ArrowRight className="size-4" /></Button></div>
-    {tasks.length ? <div className="mt-4 divide-y divide-border overflow-hidden rounded-2xl border border-border">{tasks.filter((task) => !task.is_complete).slice(0, 3).map((task) => <TaskRow key={task.id} task={task} onToggle={toggleTask} />)}</div> : <div className="surface-soft mt-4 flex flex-wrap items-center justify-between gap-4 p-5"><div><p className="font-medium">Start with a roadmap made for you</p><p className="mt-1 text-sm text-muted-foreground">Tell Polar Jobs where you want to go, and get a set of practical next steps.</p></div><Button onClick={createRoadmap} disabled={roadmapBusy}><Sparkles className="size-4" /> {roadmapBusy ? "Thinking…" : "Create roadmap"}</Button></div>}
+    {tasks.length ? <div className="mt-4 divide-y divide-border overflow-hidden rounded-2xl border border-border">{tasks.filter((task) => !task.is_complete && task.parent_id === null).slice(0, 3).map((task) => <TaskRow key={task.id} task={task} onToggle={toggleTask} />)}</div> : <div className="surface-soft mt-4 flex flex-wrap items-center justify-between gap-4 p-5"><div><p className="font-medium">Start with a roadmap made for you</p><p className="mt-1 text-sm text-muted-foreground">Tell Polar Jobs where you want to go, and get a set of practical next steps.</p></div><Button onClick={createRoadmap} disabled={roadmapBusy}><Sparkles className="size-4" /> {roadmapBusy ? "Thinking…" : "Create roadmap"}</Button></div>}
     <div className="mt-8 flex items-center justify-between gap-3">
   <div>
     <p className="eyebrow">Recent practice</p>
