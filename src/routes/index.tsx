@@ -662,11 +662,38 @@ function TaskRow({ task, onToggle }: { task: Task; onToggle: (task: Task) => voi
   return <div className="flex items-start gap-3 bg-surface-raised p-4"><Button variant="ghost" size="icon" aria-label={task.is_complete ? "Mark step incomplete" : "Mark step complete"} onClick={() => void onToggle(task)}>{task.is_complete ? <CheckCircle2 className="size-5 text-lime" /> : <Circle className="size-5 text-muted-foreground" />}</Button><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><p className={`text-sm font-medium ${task.is_complete ? "task-done" : ""}`}>{task.title}</p><span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] text-muted-foreground">Week {task.week_number}</span></div><p className="mt-1 text-xs leading-5 text-muted-foreground">{task.description}</p></div><span className="hidden text-xs text-muted-foreground sm:block">{task.category}</span></div>;
 }
 
-function Roadmap({ profile, tasks, createRoadmap, roadmapBusy, toggleTask }: { profile: Profile; tasks: Task[]; createRoadmap: () => void; roadmapBusy: boolean; toggleTask: (task: Task) => void }) {
+function Roadmap({ profile, tasks, createRoadmap, roadmapBusy, toggleTask, addSubtask, deleteSubtask }: { profile: Profile; tasks: Task[]; createRoadmap: () => void; roadmapBusy: boolean; toggleTask: (task: Task) => void; addSubtask: (parent: Task, title: string) => Promise<void>; deleteSubtask: (task: Task) => Promise<void> }) {
   const weeks = [...new Set(tasks.map((task) => task.week_number))].sort((a, b) => a - b);
+  const [addingFor, setAddingFor] = useState<string | null>(null);
+  const [subtaskDraft, setSubtaskDraft] = useState("");
+  const [subtaskBusyFor, setSubtaskBusyFor] = useState<string | null>(null);
+  const submitSubtask = async (parent: Task) => {
+    const title = subtaskDraft.trim();
+    if (!title) return;
+    setSubtaskBusyFor(parent.id);
+    try {
+      await addSubtask(parent, title);
+      setSubtaskDraft("");
+      setAddingFor(null);
+    } finally { setSubtaskBusyFor(null); }
+  };
   return <><PageTitle kicker="Your next chapter" title="My roadmap" description={profile.target_role ? `Your practical plan for moving toward ${profile.target_role}.` : "A practical plan built around the role you want and time you can set aside."} action={<Button onClick={createRoadmap} disabled={roadmapBusy}><Sparkles className="size-4" /> {roadmapBusy ? "Building…" : tasks.length ? "Refresh roadmap" : "Create roadmap"}</Button>} />
-    {tasks.length ? <div className="space-y-6">{weeks.map((week) => <section key={week}><div className="mb-3 flex items-center gap-3"><span className="flex size-8 items-center justify-center rounded-full bg-accent text-xs font-semibold text-primary">{week}</span><h2 className="text-sm font-semibold">Week {week}</h2><span className="text-xs text-muted-foreground">{tasks.filter((task) => task.week_number === week).filter((task) => task.is_complete).length}/{tasks.filter((task) => task.week_number === week).length} complete</span></div><div className="divide-y divide-border overflow-hidden rounded-2xl border border-border">{tasks.filter((task) => task.week_number === week).map((task) => <TaskRow key={task.id} task={task} onToggle={toggleTask} />)}</div></section>)}</div> : <div className="surface-soft p-6"><Sparkles className="size-5 text-primary" /><h2 className="mt-4 font-semibold">A path, shaped around you</h2><p className="mt-2 max-w-xl text-sm leading-6 text-muted-foreground">Your coach will turn your goal, current skills, and weekly time into a set of meaningful milestones. Add a target role in your profile to begin.</p><Button className="mt-5" onClick={createRoadmap} disabled={roadmapBusy}>{roadmapBusy ? "Building your plan…" : "Create my roadmap"} <ArrowRight className="size-4" /></Button></div>}
+    {tasks.length ? <div className="space-y-6">{weeks.map((week) => {
+      const weekSteps = tasks.filter((task) => task.week_number === week);
+      return <section key={week}><div className="mb-3 flex items-center gap-3"><span className="flex size-8 items-center justify-center rounded-full bg-accent text-xs font-semibold text-primary">{week}</span><h2 className="text-sm font-semibold">Week {week}</h2><span className="text-xs text-muted-foreground">{weekSteps.filter((task) => task.is_complete).length}/{weekSteps.length} complete</span></div><div className="divide-y divide-border overflow-hidden rounded-2xl border border-border">{weekSteps.filter((task) => task.parent_id === null).map((task) => {
+        const subtasks = tasks.filter((sub) => sub.parent_id === task.id);
+        return <div key={task.id}>
+          <TaskRow task={task} onToggle={toggleTask} />
+          {subtasks.map((sub) => <SubtaskRow key={sub.id} task={sub} onToggle={toggleTask} onDelete={deleteSubtask} />)}
+          {addingFor === task.id ? <form className="flex items-center gap-2 bg-surface-raised px-4 py-3" onSubmit={(event) => { event.preventDefault(); void submitSubtask(task); }}><Input value={subtaskDraft} onChange={(event) => setSubtaskDraft(event.target.value)} placeholder="Break it into a smaller step…" maxLength={140} autoFocus disabled={subtaskBusyFor === task.id} className="h-8 flex-1 text-xs" /><Button type="submit" size="sm" disabled={!subtaskDraft.trim() || subtaskBusyFor === task.id}>Add</Button><Button type="button" variant="ghost" size="sm" onClick={() => { setAddingFor(null); setSubtaskDraft(""); }}>Cancel</Button></form> : <button type="button" className="flex w-full items-center gap-2 bg-surface-raised px-4 py-2.5 text-left text-xs text-muted-foreground transition-colors hover:text-foreground" onClick={() => { setAddingFor(task.id); setSubtaskDraft(""); }}><Plus className="size-3.5" /> Add subtask</button>}
+        </div>;
+      })}</div></section>;
+    })}</div> : <div className="surface-soft p-6"><Sparkles className="size-5 text-primary" /><h2 className="mt-4 font-semibold">A path, shaped around you</h2><p className="mt-2 max-w-xl text-sm leading-6 text-muted-foreground">Your coach will turn your goal, current skills, and weekly time into a set of meaningful milestones. Add a target role in your profile to begin.</p><Button className="mt-5" onClick={createRoadmap} disabled={roadmapBusy}>{roadmapBusy ? "Building your plan…" : "Create my roadmap"} <ArrowRight className="size-4" /></Button></div>}
   </>;
+}
+
+function SubtaskRow({ task, onToggle, onDelete }: { task: Task; onToggle: (task: Task) => void; onDelete: (task: Task) => void }) {
+  return <div className="flex items-center gap-2 border-t border-border/70 bg-surface-raised/50 py-2 pl-10 pr-3"><Button variant="ghost" size="icon" className="size-7" aria-label={task.is_complete ? "Mark subtask incomplete" : "Mark subtask complete"} onClick={() => void onToggle(task)}>{task.is_complete ? <CheckCircle2 className="size-4 text-lime" /> : <Circle className="size-4 text-muted-foreground" />}</Button><p className={`min-w-0 flex-1 truncate text-xs font-medium ${task.is_complete ? "task-done" : ""}`}>{task.title}</p><Button variant="ghost" size="icon" className="size-7" aria-label="Remove subtask" onClick={() => void onDelete(task)}><X className="size-3.5 text-muted-foreground" /></Button></div>;
 }
 
 function ResumeStudio({ role, resumeText, setResumeText, feedback, busy, submit, tool, setTool, jobDescription, setJobDescription, matchResult, matchBusy, submitMatch, uploadBusy, onUploadFile, fileName }: { role: string; resumeText: string; setResumeText: (value: string) => void; feedback: string; busy: boolean; submit: () => void; tool: "feedback" | "matcher"; setTool: (tool: "feedback" | "matcher") => void; jobDescription: string; setJobDescription: (value: string) => void; matchResult: JobMatchResult | null; matchBusy: boolean; submitMatch: () => void; uploadBusy: boolean; onUploadFile: (file: File) => void; fileName: string }) {
