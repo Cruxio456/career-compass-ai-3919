@@ -7,7 +7,7 @@ import {
   ArrowDownRight, ArrowRight, ArrowUpRight, Award, BookOpenCheck, BriefcaseBusiness,
   Check, CheckCircle2, ChevronDown, Circle, Compass, FileText, Flame, Gauge,
   LogOut, MessageSquareText, PencilLine, Plus, Send, Sparkles, Target, TrendingUp,
-  Upload, UserRound, WandSparkles,
+  Upload, UserRound, WandSparkles, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -196,6 +196,59 @@ function PolarJobs() {
     if (error) {
       queryClient.setQueryData(key, previous);
       toast.error("That step couldn’t be updated.");
+      return;
+    }
+    await queryClient.invalidateQueries({ queryKey: key });
+  };
+
+  const addSubtask = async (parent: Task, title: string) => {
+    if (!userId) return;
+    const clean = title.trim().slice(0, 140);
+    if (!clean) return;
+    const key = ["polar-workspace", userId] as const;
+    const previous = queryClient.getQueryData(key);
+    const siblings = tasks.filter((t) => t.parent_id === parent.id);
+    const optimistic: Task = {
+      ...parent,
+      id: crypto.randomUUID(),
+      parent_id: parent.id,
+      title: clean,
+      description: "",
+      is_complete: false,
+      sort_order: siblings.length + 1,
+      created_at: new Date().toISOString(),
+    };
+    queryClient.setQueryData(key, (old: typeof workspace.data) =>
+      old ? { ...old, tasks: [...old.tasks, optimistic] } : old,
+    );
+    const { error } = await supabase.from("roadmap_tasks").insert({
+      user_id: userId,
+      parent_id: parent.id,
+      title: clean,
+      description: "",
+      category: parent.category,
+      week_number: parent.week_number,
+      sort_order: siblings.length + 1,
+    });
+    if (error) {
+      queryClient.setQueryData(key, previous);
+      toast.error("That subtask couldn’t be added.");
+      return;
+    }
+    await queryClient.invalidateQueries({ queryKey: key });
+  };
+
+  const deleteSubtask = async (task: Task) => {
+    if (!userId) return;
+    const key = ["polar-workspace", userId] as const;
+    const previous = queryClient.getQueryData(key);
+    queryClient.setQueryData(key, (old: typeof workspace.data) =>
+      old ? { ...old, tasks: old.tasks.filter((t) => t.id !== task.id) } : old,
+    );
+    const { error } = await supabase.from("roadmap_tasks").delete().eq("id", task.id);
+    if (error) {
+      queryClient.setQueryData(key, previous);
+      toast.error("That subtask couldn’t be removed.");
       return;
     }
     await queryClient.invalidateQueries({ queryKey: key });
@@ -483,7 +536,7 @@ return (
             <Overview profile={profile} tasks={tasks} interviews={interviews} completion={completion} completedTasks={completedTasks} greetingName={greetingName} setSection={setSection} createRoadmap={createRoadmap} roadmapBusy={roadmapBusy} toggleTask={toggleTask} />
           )}
           {section === "My roadmap" && (
-            <Roadmap profile={profile} tasks={tasks} createRoadmap={createRoadmap} roadmapBusy={roadmapBusy} toggleTask={toggleTask} />
+            <Roadmap profile={profile} tasks={tasks} createRoadmap={createRoadmap} roadmapBusy={roadmapBusy} toggleTask={toggleTask} addSubtask={addSubtask} deleteSubtask={deleteSubtask} />
           )}
           {section === "Resume studio" && (
             <ResumeStudio role={profile.target_role} resumeText={resumeText} setResumeText={(value) => { setResumeText(value); setMatchResult(null); }} feedback={resumeFeedback} busy={resumeBusy} submit={submitResume} tool={resumeTool} setTool={setResumeTool} jobDescription={jobDescription} setJobDescription={(value) => { setJobDescription(value); setMatchResult(null); }} matchResult={matchResult} matchBusy={matchBusy} submitMatch={submitJobMatch} uploadBusy={resumeUploadBusy} onUploadFile={(file) => void uploadResumeFile(file)} fileName={resumeFileName} />
