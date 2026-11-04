@@ -1,0 +1,2 @@
+ALTER TABLE public.roadmap_tasks ADD COLUMN parent_id uuid REFERENCES public.roadmap_tasks(id) ON DELETE CASCADE;
+COMMENT ON COLUMN public.roadmap_tasks.parent_id IS 'Optional parent task; a non-null value marks the row as a subtask of that task within the same week.';
