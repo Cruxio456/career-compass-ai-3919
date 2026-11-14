@@ -489,7 +489,7 @@ return (
             <ResumeStudio role={profile.target_role} resumeText={resumeText} setResumeText={(value) => { setResumeText(value); setMatchResult(null); }} feedback={resumeFeedback} busy={resumeBusy} submit={submitResume} tool={resumeTool} setTool={setResumeTool} jobDescription={jobDescription} setJobDescription={(value) => { setJobDescription(value); setMatchResult(null); }} matchResult={matchResult} matchBusy={matchBusy} submitMatch={submitJobMatch} uploadBusy={resumeUploadBusy} onUploadFile={(file) => void uploadResumeFile(file)} fileName={resumeFileName} />
           )}
           {section === "Interview practice" && (
-            <InterviewPractice question={currentQuestion} tip={questionTip} category={questionCategory} answer={answer} setAnswer={setAnswer} busy={interviewBusy} feedback={latestFeedback} submit={submitInterviewAnswer} sessions={interviews} categories={INTERVIEW_CATEGORIES} onCategory={pickQuestionCategory} generateBusy={questionBusy} onGenerate={() => void generateQuestion()} customDraft={customQuestionDraft} setCustomDraft={setCustomQuestionDraft} onUseCustom={useCustomQuestion} />
+            <PracticeModes role={profile.target_role || "your next role"} userId={userId as string}><InterviewPractice question={currentQuestion} tip={questionTip} category={questionCategory} answer={answer} setAnswer={setAnswer} busy={interviewBusy} feedback={latestFeedback} submit={submitInterviewAnswer} sessions={interviews} categories={INTERVIEW_CATEGORIES} onCategory={pickQuestionCategory} generateBusy={questionBusy} onGenerate={() => void generateQuestion()} customDraft={customQuestionDraft} setCustomDraft={setCustomQuestionDraft} onUseCustom={useCustomQuestion} /></PracticeModes>
           )}
 
           {/* Career Profile settings form remains intact at the bottom */}
@@ -690,6 +690,69 @@ function InterviewPractice({ question, tip, category, answer, setAnswer, busy, f
       <section className="surface-soft min-h-64 p-5 sm:p-6"><p className="eyebrow">Coaching notes</p>{feedback ? <><div className="mt-4 flex items-center gap-3"><span className="display-heading text-4xl">{feedback.score}</span><span className="text-xs text-muted-foreground">out of 100<br />for this answer</span><span className="ml-auto"><ScoreMark score={feedback.score} /></span></div><div className="feedback-copy mt-3 whitespace-pre-wrap text-sm leading-7">{feedback.feedback}</div></> : <div className="flex min-h-44 flex-col items-center justify-center text-center"><Award className="size-6 text-coral" /><p className="mt-3 text-sm font-medium">A safe place to find your words.</p><p className="mt-2 max-w-xs text-xs leading-5 text-muted-foreground">Share your answer and your coach will help you find the signal in your story.</p></div>}</section>
     </div>
   </>;
+}
+
+const GAME_ROUNDS = [
+  { name: "Warm-up", category: "Behavioral", line: "Thanks for coming in! Let's start easy." },
+  { name: "Core challenge", category: "Situational", line: "Nice. Now let's dig into how you handle real work." },
+  { name: "Curveball", category: "Leadership", line: "Last one — this is the tricky one." },
+] as const;
+
+function PracticeModes({ role, userId, children }: { role: string; userId: string; children: React.ReactNode }) {
+  const [mode, setMode] = useState<"game" | "drill">("game");
+  return <>
+    <div className="mb-5 flex gap-1.5" role="group" aria-label="Practice mode">{(["game", "drill"] as const).map((m) => <button key={m} type="button" aria-pressed={mode === m} onClick={() => setMode(m)} className={`rounded-full px-3 py-1.5 text-xs font-medium ${mode === m ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground hover:text-foreground"}`}>{m === "game" ? "Mock interview game" : "Single question drill"}</button>)}</div>
+    {mode === "game" ? <InterviewGame role={role} userId={userId} /> : children}
+  </>;
+}
+
+function verdict(avg: number) { return avg >= 80 ? "Strong hire" : avg >= 65 ? "Hire" : "Needs polish"; }
+
+function InterviewGame({ role, userId }: { role: string; userId: string }) {
+  const queryClient = useQueryClient();
+  const getQuestion = useServerFn(generateInterviewQuestion);
+  const getReview = useServerFn(reviewInterviewAnswer);
+  const [round, setRound] = useState(-1);
+  const [question, setQuestion] = useState("");
+  const [answer, setAnswer] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [results, setResults] = useState<{ question: string; score: number; feedback: string }[]>([]);
+  const current = results[round];
+  const done = round === GAME_ROUNDS.length - 1 && !!current;
+  const avg = results.length ? Math.round(results.reduce((a, r) => a + r.score, 0) / results.length) : 0;
+
+  const loadRound = async (next: number) => {
+    setBusy(true);
+    try {
+      const q = await getQuestion({ data: { role, category: GAME_ROUNDS[next]?.category ?? "Behavioral" } });
+      setQuestion(q.question); setAnswer(""); setRound(next);
+    } catch (e) { toast.error(e instanceof Error ? e.message : "The interviewer couldn’t think of a question."); }
+    finally { setBusy(false); }
+  };
+  const start = () => { setResults([]); void loadRound(0); };
+  const submit = async () => {
+    setBusy(true);
+    try {
+      const r = await getReview({ data: { role, question, answer } });
+      await supabase.from("interview_sessions").insert({ user_id: userId, target_role: role, question, answer, feedback: r.feedback, score: r.score });
+      setResults((prev) => { const copy = [...prev]; copy[round] = { question, ...r }; return copy; });
+      void queryClient.invalidateQueries({ queryKey: ["polar-workspace", userId] });
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Your answer couldn’t be scored."); }
+    finally { setBusy(false); }
+  };
+
+  if (round < 0) return <section className="surface flex flex-col items-center p-8 text-center"><img src="/Polar.svg" alt="" className="size-20" /><h2 className="mt-4 text-xl font-semibold">Mock interview for {role}</h2><p className="mt-2 max-w-md text-sm text-muted-foreground">3 rounds. The interviewer asks, you answer, and each answer gets scored. Finish all rounds to get your hiring verdict.</p><Button className="mt-5" onClick={start} disabled={busy}>{busy ? "Interviewer is joining…" : "Start interview"}</Button></section>;
+
+  if (done) return <section className="surface p-6 text-center"><p className="eyebrow">Final scorecard</p><p className="display-heading mt-3 text-5xl">{avg}</p><p className="mt-1 text-lg font-semibold text-primary">{verdict(avg)}</p><ul className="mx-auto mt-5 max-w-xl space-y-2 text-left">{results.map((r, i) => <li key={i} className="surface-soft flex items-center gap-3 p-3 text-sm"><span className="font-medium">Round {i + 1}</span><span className="flex-1 truncate text-muted-foreground">{r.question}</span><span className="font-semibold">{r.score}</span></li>)}</ul><Button className="mt-5" onClick={start} disabled={busy}>{busy ? "Starting…" : "Play again"}</Button></section>;
+
+  const info = GAME_ROUNDS[round] ?? GAME_ROUNDS[0];
+  return <section className="surface p-5 sm:p-6">
+    <div className="flex items-center justify-between text-xs text-muted-foreground"><span>Round {round + 1} of {GAME_ROUNDS.length} · {info.name}</span><span>Score so far: {avg || "—"}</span></div>
+    <div className="progress-track mt-2"><div className="progress-fill" style={{ width: `${((round + (current ? 1 : 0)) / GAME_ROUNDS.length) * 100}%` }} /></div>
+    <div className="mt-5 flex items-start gap-3"><img src="/Polar.svg" alt="Interviewer" className="size-12 shrink-0 rounded-full bg-secondary p-1" /><div className="rounded-2xl rounded-tl-sm bg-secondary p-4 text-sm leading-6"><p className="text-muted-foreground">{info.line}</p><p className="mt-1 font-medium">{question}</p></div></div>
+    {current ? <div className="mt-4 flex flex-col items-end gap-3"><div className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-tr-sm bg-accent p-4 text-sm">{answer}</div><div className="surface-soft w-full p-4"><div className="flex items-center gap-3"><span className="display-heading text-3xl">{current.score}</span><ScoreMark score={current.score} /></div><div className="feedback-copy mt-2 whitespace-pre-wrap text-sm leading-6">{current.feedback}</div></div><Button onClick={() => void loadRound(round + 1)} disabled={busy}>{busy ? "Next question coming…" : round === GAME_ROUNDS.length - 2 ? "Final round" : "Next round"}</Button></div>
+    : <><Textarea className="mt-4 min-h-36 leading-6" value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder="Your answer… (tip: situation, task, action, result)" /><Button className="mt-3" onClick={() => void submit()} disabled={busy || answer.trim().length < 20}>{busy ? "Interviewer is thinking…" : "Answer"}<Send className="size-4" /></Button></>}
+  </section>;
 }
 
 function ScoreMark({ score }: { score: number }) { return score >= 80 ? <span className="rounded-full bg-secondary px-2.5 py-1 text-[10px] text-lime">Strong</span> : score >= 60 ? <span className="rounded-full bg-secondary px-2.5 py-1 text-[10px] text-ice">Taking shape</span> : <span className="rounded-full bg-secondary px-2.5 py-1 text-[10px] text-coral">Getting started</span>; }
