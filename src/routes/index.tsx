@@ -201,26 +201,6 @@ function PolarJobs() {
     await queryClient.invalidateQueries({ queryKey: key });
   };
 
-    queryClient.setQueryData(key, (old: typeof workspace.data) =>
-      old ? { ...old, tasks: [...old.tasks, optimistic] } : old,
-    );
-    const { error } = await supabase.from("roadmap_tasks").insert({
-      user_id: userId,
-      parent_id: parent.id,
-      title: clean,
-      description: "",
-      category: parent.category,
-      week_number: parent.week_number,
-      sort_order: siblings.length + 1,
-    });
-    if (error) {
-      queryClient.setQueryData(key, previous);
-      toast.error("That subtask couldn’t be added.");
-      return;
-    }
-    await queryClient.invalidateQueries({ queryKey: key });
-  };
-
   const submitResume = async () => {
     if (!profile) return;
     setResumeBusy(true); setResumeFeedback("");
@@ -646,14 +626,7 @@ function Roadmap({
   return <><PageTitle kicker="Your next chapter" title="My roadmap" description={profile.target_role ? `Your practical plan for moving toward ${profile.target_role}.` : "A practical plan built around the role you want and time you can set aside."} action={<Button onClick={createRoadmap} disabled={roadmapBusy}><Sparkles className="size-4" /> {roadmapBusy ? "Building…" : tasks.length ? "Refresh roadmap" : "Create roadmap"}</Button>} />
     {tasks.length ? <div className="space-y-6">{weeks.map((week) => {
       const weekSteps = tasks.filter((task) => task.week_number === week);
-      return <section key={week}><div className="mb-3 flex items-center gap-3"><span className="flex size-8 items-center justify-center rounded-full bg-accent text-xs font-semibold text-primary">{week}</span><h2 className="text-sm font-semibold">Week {week}</h2><span className="text-xs text-muted-foreground">{weekSteps.filter((task) => task.is_complete).length}/{weekSteps.length} complete</span></div><div className="divide-y divide-border overflow-hidden rounded-2xl border border-border">{weekSteps.filter((task) => task.parent_id === null).map((task) => {
-        const subtasks = tasks.filter((sub) => sub.parent_id === task.id);
-        return <div key={task.id}>
-          <TaskRow task={task} onToggle={toggleTask} />
-          {subtasks.map((sub) => <SubtaskRow key={sub.id} task={sub} onToggle={toggleTask} onDelete={deleteSubtask} />)}
-          {addingFor === task.id ? <form className="flex items-center gap-2 bg-surface-raised px-4 py-3" onSubmit={(event) => { event.preventDefault(); void submitSubtask(task); }}><Input value={subtaskDraft} onChange={(event) => setSubtaskDraft(event.target.value)} placeholder="Break it into a smaller step…" maxLength={140} autoFocus disabled={subtaskBusyFor === task.id} className="h-8 flex-1 text-xs" /><Button type="submit" size="sm" disabled={!subtaskDraft.trim() || subtaskBusyFor === task.id}>Add</Button><Button type="button" variant="ghost" size="sm" onClick={() => { setAddingFor(null); setSubtaskDraft(""); }}>Cancel</Button></form> : <button type="button" className="flex w-full items-center gap-2 bg-surface-raised px-4 py-2.5 text-left text-xs text-muted-foreground transition-colors hover:text-foreground" onClick={() => { setAddingFor(task.id); setSubtaskDraft(""); }}><Plus className="size-3.5" /> Add subtask</button>}
-        </div>;
-      })}</div></section>;
+      return <section key={week}><div className="mb-3 flex items-center gap-3"><span className="flex size-8 items-center justify-center rounded-full bg-accent text-xs font-semibold text-primary">{week}</span><h2 className="text-sm font-semibold">Week {week}</h2><span className="text-xs text-muted-foreground">{weekSteps.filter((task) => task.is_complete).length}/{weekSteps.length} complete</span></div><div className="divide-y divide-border overflow-hidden rounded-2xl border border-border">{weekSteps.filter((task) => task.parent_id === null).map((task) => <TaskRow key={task.id} task={task} onToggle={toggleTask} />)}</div></section>;
     })}</div> : <div className="surface-soft p-6"><Sparkles className="size-5 text-primary" /><h2 className="mt-4 font-semibold">A path, shaped around you</h2><p className="mt-2 max-w-xl text-sm leading-6 text-muted-foreground">Your coach will turn your goal, current skills, and weekly time into a set of meaningful milestones. Add a target role in your profile to begin.</p><Button className="mt-5" onClick={createRoadmap} disabled={roadmapBusy}>{roadmapBusy ? "Building your plan…" : "Create my roadmap"} <ArrowRight className="size-4" /></Button></div>}
   </>;
 }
