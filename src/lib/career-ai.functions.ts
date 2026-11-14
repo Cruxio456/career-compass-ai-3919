@@ -85,18 +85,20 @@ const roadmapFn = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const result = await generate(
       new Request("https://polar-jobs.local/roadmap", { method: "POST" }),
-      "You are a practical, encouraging career coach. Generate a specific, realistic career roadmap. Return only valid JSON with an object containing a tasks array. Each task must have title (short), description (one useful sentence), category (one of Skill building, Portfolio, Networking, Interview prep, Career growth), week (integer from 1 to 6). Include 6 tasks in sensible order. No markdown fences.",
+      "You are a practical, encouraging career coach. Generate a specific, realistic career roadmap. Return only valid JSON with an object containing a tasks array. Each task must have title (short), description (one useful sentence), category (one of Skill building, Portfolio, Networking, Interview prep, Career growth), week (integer from 1 to 4), day (integer from 1 to 7). Plan 4 weeks with exactly 7 daily tasks per week (28 tasks), sized to the weekly hours: Day 1 fundamentals, Day 2 skill drill, Day 3 hands-on build, Day 4 problem solving, Day 5 mock practice, Day 6 portfolio or networking, Day 7 review and plan ahead. No markdown fences.",
       JSON.stringify({ targetRole: data.role, experience: data.level, careerGoal: data.goal, availableHoursPerWeek: data.hours, currentSkills: data.skills }),
     );
     let parsed: { tasks?: unknown };
     try { parsed = JSON.parse(result) as { tasks?: unknown }; } catch { throw new Error("Your roadmap could not be formatted. Please try generating it again."); }
     if (!Array.isArray(parsed.tasks) || parsed.tasks.length < 1) throw new Error("Your roadmap did not include any steps. Please try again.");
-    const tasks = parsed.tasks.slice(0, 10).map((task, index) => {
+    const tasks = parsed.tasks.slice(0, 28).map((task, index) => {
       const row = task as Record<string, unknown>;
-      const week = typeof row["week"] === "number" ? Math.min(6, Math.max(1, Math.round(row["week"]))) : Math.ceil((index + 1) / 2);
+      const week = typeof row["week"] === "number" ? Math.min(4, Math.max(1, Math.round(row["week"]))) : Math.floor(index / 7) + 1;
+      const day = typeof row["day"] === "number" ? Math.min(7, Math.max(1, Math.round(row["day"]))) : (index % 7) + 1;
+      const rawTitle = typeof row["title"] === "string" ? row["title"].trim().replace(/^day\s*\d+\s*[:\-]?\s*/i, "") : `Career milestone ${index + 1}`;
       return {
         user_id: context.userId,
-        title: typeof row["title"] === "string" ? row["title"].slice(0, 140) : `Career milestone ${index + 1}`,
+        title: `Day ${day}: ${rawTitle}`.slice(0, 140),
         description: typeof row["description"] === "string" ? row["description"].slice(0, 360) : "Take a focused step toward your next role.",
         category: typeof row["category"] === "string" ? row["category"].slice(0, 60) : "Career growth",
         week_number: week,
