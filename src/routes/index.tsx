@@ -741,17 +741,52 @@ function InterviewGame({ role, userId }: { role: string; userId: string }) {
     finally { setBusy(false); }
   };
 
-  if (round < 0) return <section className="surface flex flex-col items-center p-8 text-center"><img src="/Polar.svg" alt="" className="size-20" /><h2 className="mt-4 text-xl font-semibold">Mock interview for {role}</h2><p className="mt-2 max-w-md text-sm text-muted-foreground">3 rounds. The interviewer asks, you answer, and each answer gets scored. Finish all rounds to get your hiring verdict.</p><Button className="mt-5" onClick={start} disabled={busy}>{busy ? "Interviewer is joining…" : "Start interview"}</Button></section>;
+  if (round < 0) return <section className="surface overflow-hidden">
+    <div className="flex flex-col gap-6 border-b border-border bg-secondary/40 p-6 sm:flex-row sm:items-center sm:justify-between sm:p-8">
+      <div className="max-w-xl">
+        <span className="inline-flex items-center gap-2 rounded-full bg-background px-3 py-1.5 text-xs font-medium text-primary"><Sparkles className="size-3.5" /> Mock interview</span>
+        <h2 className="mt-4 text-2xl font-semibold">Your next role: {role}</h2>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">Take a seat, meet your interviewer, and work through three rounds tailored to the role you want.</p>
+      </div>
+      <div className="flex size-24 shrink-0 items-center justify-center rounded-full bg-background ring-1 ring-border sm:size-28"><img src="/Polar.svg" alt="Polar interviewer" className="size-16 object-contain sm:size-20" /></div>
+    </div>
+    <div className="p-6 sm:p-8">
+      <p className="eyebrow">Today’s interview</p>
+      <ol className="mt-4 grid gap-3 sm:grid-cols-3">{GAME_ROUNDS.map((item, index) => <li key={item.name} className="flex items-center gap-3 rounded-xl border border-border p-4"><span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-accent text-sm font-semibold text-primary">0{index + 1}</span><span><span className="block text-sm font-medium">{item.name}</span><span className="mt-0.5 block text-xs text-muted-foreground">{item.category}</span></span></li>)}</ol>
+      <div className="mt-6 flex flex-wrap items-center gap-4"><Button onClick={start} disabled={busy}>{busy ? "Interviewer is joining…" : "Start interview"}<ArrowRight className="size-4" /></Button><span className="text-xs text-muted-foreground">Three questions · Personalized to {role}</span></div>
+    </div>
+  </section>;
 
-  if (done) return <section className="surface p-6 text-center"><p className="eyebrow">Final scorecard</p><p className="display-heading mt-3 text-5xl">{avg}</p><p className="mt-1 text-lg font-semibold text-primary">{verdict(avg)}</p><ul className="mx-auto mt-5 max-w-xl space-y-2 text-left">{results.map((r, i) => <li key={i} className="surface-soft flex items-center gap-3 p-3 text-sm"><span className="font-medium">Round {i + 1}</span><span className="flex-1 truncate text-muted-foreground">{r.question}</span><span className="font-semibold">{r.score}</span></li>)}</ul><Button className="mt-5" onClick={start} disabled={busy}>{busy ? "Starting…" : "Play again"}</Button></section>;
+  if (done) return <section className="surface overflow-hidden">
+    <div className="bg-secondary/40 px-6 py-8 text-center sm:px-8"><span className="inline-flex items-center gap-2 rounded-full bg-background px-3 py-1.5 text-xs font-medium text-primary"><CheckCircle2 className="size-3.5" /> Interview complete</span><h2 className="mt-4 text-xl font-semibold">Your final scorecard</h2><div className="mx-auto mt-5 flex size-28 flex-col items-center justify-center rounded-full border-4 border-primary bg-background"><span className="display-heading text-4xl">{avg}</span><span className="text-[10px] text-muted-foreground">OUT OF 100</span></div><p className="mt-3 text-lg font-semibold text-primary">{verdict(avg)}</p><p className="mt-1 text-sm text-muted-foreground">A strong step toward your {role} interview.</p></div>
+    <div className="p-5 sm:p-8"><p className="eyebrow">Round results</p><ol className="mt-3 divide-y divide-border">{results.map((r, i) => <li key={i} className="flex items-center gap-3 py-4"><span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-semibold text-primary">0{i + 1}</span><span className="min-w-0 flex-1"><span className="block text-sm font-medium">{GAME_ROUNDS[i]?.name}</span><span className="block truncate text-xs text-muted-foreground">{r.question}</span></span><span className="text-lg font-semibold">{r.score}</span></li>)}</ol><Button className="mt-5" onClick={start} disabled={busy}>{busy ? "Starting…" : "Play again"}<ArrowRight className="size-4" /></Button></div>
+  </section>;
 
   const info = GAME_ROUNDS[round] ?? GAME_ROUNDS[0];
-  return <section className="surface p-5 sm:p-6">
-    <div className="flex items-center justify-between text-xs text-muted-foreground"><span>Round {round + 1} of {GAME_ROUNDS.length} · {info.name}</span><span>Score so far: {avg || "—"}</span></div>
-    <div className="progress-track mt-2"><div className="progress-fill" style={{ width: `${((round + (current ? 1 : 0)) / GAME_ROUNDS.length) * 100}%` }} /></div>
-    <div className="mt-5 flex items-start gap-3"><img src="/Polar.svg" alt="Interviewer" className="size-12 shrink-0 rounded-full bg-secondary p-1" /><div className="rounded-2xl rounded-tl-sm bg-secondary p-4 text-sm leading-6"><p className="text-muted-foreground">{info.line}</p><p className="mt-1 font-medium">{question}</p></div></div>
-    {current ? <div className="mt-4 flex flex-col items-end gap-3"><div className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-tr-sm bg-accent p-4 text-sm">{answer}</div><div className="surface-soft w-full p-4"><div className="flex items-center gap-3"><span className="display-heading text-3xl">{current.score}</span><ScoreMark score={current.score} /></div><div className="feedback-copy mt-2 whitespace-pre-wrap text-sm leading-6">{current.feedback}</div></div><Button onClick={() => void loadRound(round + 1)} disabled={busy}>{busy ? "Next question coming…" : round === GAME_ROUNDS.length - 2 ? "Final round" : "Next round"}</Button></div>
-    : <><Textarea className="mt-4 min-h-36 leading-6" value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder="Your answer… (tip: situation, task, action, result)" /><Button className="mt-3" onClick={() => void submit()} disabled={busy || answer.trim().length < 20}>{busy ? "Interviewer is thinking…" : "Answer"}<Send className="size-4" /></Button></>}
+  return <section className="surface overflow-hidden">
+    <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border px-5 py-4 sm:px-7">
+      <div><p className="eyebrow">Mock interview · {role}</p><h2 className="mt-1 text-lg font-semibold">{info.name}</h2></div>
+      <span className="inline-flex items-center gap-2 rounded-full bg-secondary px-3 py-1.5 text-xs font-medium text-muted-foreground"><Flame className="size-3.5 text-coral" />{avg ? `${avg} avg. score` : "In progress"}</span>
+    </div>
+    <div className="px-5 pt-5 sm:px-7"><ol className="grid grid-cols-3 gap-2" aria-label="Interview round progress">{GAME_ROUNDS.map((item, index) => <li key={item.name} className="min-w-0"><div className={`mb-2 h-1.5 rounded-full ${index <= round ? "bg-primary" : "bg-muted"}`} /><span className={`block truncate text-[11px] font-medium ${index === round ? "text-primary" : "text-muted-foreground"}`}>0{index + 1} · {item.name}</span></li>)}</ol></div>
+    <div className="grid gap-6 p-5 sm:p-7 lg:grid-cols-[0.9fr_1.1fr]">
+      <div className="flex min-h-64 flex-col justify-between rounded-xl bg-secondary/45 p-5 sm:p-6">
+        <div className="flex items-center gap-3"><div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-background ring-1 ring-border"><img src="/Polar.svg" alt="Polar interviewer" className="size-8 object-contain" /></div><div><p className="text-sm font-semibold">Polar interviewer</p><p className="text-xs text-muted-foreground">{info.category} round</p></div></div>
+        <div className="mt-7"><p className="text-xs leading-5 text-muted-foreground">{info.line}</p><h3 className="mt-2 text-lg font-medium leading-7">{question}</h3></div>
+        <p className="mt-6 text-[11px] text-muted-foreground">Round {round + 1} of {GAME_ROUNDS.length}</p>
+      </div>
+      <div className="flex min-w-0 flex-col">
+        {current ? <>
+          <div className="ml-auto max-w-[92%] whitespace-pre-wrap rounded-2xl rounded-tr-sm bg-accent p-4 text-sm leading-6">{answer}</div>
+          <div className="mt-4 flex-1 border-t border-border pt-4"><div className="flex items-center gap-3"><span className="display-heading text-3xl">{current.score}</span><span className="text-xs text-muted-foreground">round score</span><span className="ml-auto"><ScoreMark score={current.score} /></span></div><div className="feedback-copy mt-3 whitespace-pre-wrap text-sm leading-6">{current.feedback}</div></div>
+          <Button className="mt-5 self-start" onClick={() => void loadRound(round + 1)} disabled={busy}>{busy ? "Next question coming…" : round === GAME_ROUNDS.length - 2 ? "Final round" : "Next round"}<ArrowRight className="size-4" /></Button>
+        </> : <>
+          <div className="mb-3 flex items-center justify-between"><label className="text-sm font-semibold" htmlFor="game-answer">Your answer</label><span className="text-xs text-muted-foreground">{answer.length} characters</span></div>
+          <Textarea id="game-answer" className="min-h-56 flex-1 resize-y leading-6" value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder="Tell your story…" />
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3"><span className="text-xs text-muted-foreground">Use a specific example from your experience.</span><Button onClick={() => void submit()} disabled={busy || answer.trim().length < 20}>{busy ? "Interviewer is thinking…" : "Submit answer"}<Send className="size-4" /></Button></div>
+        </>}
+      </div>
+    </div>
   </section>;
 }
 
