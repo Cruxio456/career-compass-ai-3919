@@ -67,16 +67,27 @@ function validateRequest(input: unknown): RequestInput {
 
 async function generate(request: Request, system: string, user: string) {
   const apiKey = process.env["LOVABLE_API_KEY"];
-  if (!apiKey) throw new Error("AI coaching is temporarily unavailable. Please try again later.");
+  if (!apiKey) throw new Error("AI coaching is temporarily unavailable.");
+  
   const call = createResponsesCall(
     request,
     { baseURL: "https://ai.gateway.lovable.dev/v1", apiKey, model: "openai/gpt-6-astra" },
     [{ role: "user", content: user }],
     system,
   );
-  const text = await call.result.text;
+  
+  const [text, usage] = await Promise.all([
+    call.result.text,
+    call.result.usage, // Vercel AI SDK provides promptTokens and completionTokens
+  ]);
+
   if (!text.trim()) throw new Error("No coaching was generated. Please try again.");
-  return text;
+
+  return {
+    text,
+    inputTokens: usage.promptTokens ?? 0,
+    outputTokens: usage.completionTokens ?? 0,
+  };
 }
 
 const roadmapFn = createServerFn({ method: "POST" })
