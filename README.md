@@ -4,7 +4,7 @@ polar jobs - end to end career preparation platform: create personalised roadmap
 
 This project was built with [Lovable](https://lovable.dev).
 
-**Live app**: https://career-compass-ai-3919.lovable.app
+**Live app**: https://polarjobs.lovable.app
 
 ## Build with Lovable
 
