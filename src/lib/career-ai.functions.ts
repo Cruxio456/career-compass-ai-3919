@@ -65,6 +65,44 @@ function validateRequest(input: unknown): RequestInput {
   return { role, goal, level, skills, hours };
 }
 
+const FREE_TOKEN_LIMIT = 5000;
+
+async function checkTokenAllowance(userId: string) {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data, error } = await supabaseAdmin
+    .from("ai_usage_records")
+    .select("input_tokens, output_tokens")
+    .eq("user_id", userId);
+
+  if (error) return; // Do not block if lookup fails unexpectedly
+
+  const totalUsed = (data || []).reduce(
+    (sum, row) => sum + (row.input_tokens || 0) + (row.output_tokens || 0),
+    0
+  );
+
+  if (totalUsed >= FREE_TOKEN_LIMIT) {
+    throw new Error(
+      "TOKEN_LIMIT_REACHED: You have used all your free tokens. Upgrade to Polar Jobs Pro (₹100/mo) to continue."
+    );
+  }
+}
+
+async function recordTokenUsage(
+  userId: string,
+  feature: "roadmap" | "resume_review" | "job_match" | "interview_review" | "interview_question",
+  inputTokens: number,
+  outputTokens: number
+) {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  await supabaseAdmin.from("ai_usage_records").insert({
+    user_id: userId,
+    feature,
+    input_tokens: inputTokens,
+    output_tokens: outputTokens,
+  });
+}
+
 async function generate(request: Request, system: string, user: string) {
   const apiKey = process.env["LOVABLE_API_KEY"];
   if (!apiKey) throw new Error("AI coaching is temporarily unavailable.");
@@ -94,13 +132,18 @@ const roadmapFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator(validateRequest)
   .handler(async ({ data, context }) => {
+    await checkTokenAllowance(context.userId);
+
     const result = await generate(
       new Request("https://polar-jobs.local/roadmap", { method: "POST" }),
       "You are a practical, encouraging career coach. Generate a specific, realistic career roadmap. Return only valid JSON with an object containing a tasks array. Each task must have title (short), description (one useful sentence), category (one of Skill building, Portfolio, Networking, Interview prep, Career growth), week (integer from 1 to 4), day (integer from 1 to 7). Plan 4 weeks with exactly 7 daily tasks per week (28 tasks), sized to the weekly hours: Day 1 fundamentals, Day 2 skill drill, Day 3 hands-on build, Day 4 problem solving, Day 5 mock practice, Day 6 portfolio or networking, Day 7 review and plan ahead. No markdown fences.",
       JSON.stringify({ targetRole: data.role, experience: data.level, careerGoal: data.goal, availableHoursPerWeek: data.hours, currentSkills: data.skills }),
     );
+
+    await recordTokenUsage(context.userId, "roadmap", result.inputTokens, result.outputTokens);
+
     let parsed: { tasks?: unknown };
-    try { parsed = JSON.parse(result) as { tasks?: unknown }; } catch { throw new Error("Your roadmap could not be formatted. Please try generating it again."); }
+    try { parsed = JSON.parse(result.text) as { tasks?: unknown }; } catch { throw new Error("Your roadmap could not be formatted. Please try generating it again."); }
     if (!Array.isArray(parsed.tasks) || parsed.tasks.length < 1) throw new Error("Your roadmap did not include any steps. Please try again.");
     const tasks = parsed.tasks.slice(0, 28).map((task, index) => {
       const row = task as Record<string, unknown>;
@@ -129,11 +172,16 @@ const resumeFn = createServerFn({ method: "POST" })
     if (resume.length < 80 || !role) throw new Error("Add at least a few lines of resume text and your target role.");
     return { resume, role };
   })
-  .handler(async ({ data }) => generate(
-    new Request("https://polar-jobs.local/resume", { method: "POST" }),
-    "You are an expert resume coach. Review the provided resume for the named target role. Be specific and constructive. Organize the response into: Strong matches, Highest-impact improvements, and One rewritten example bullet. Do not invent candidate achievements or add qualifications not provided. Address the candidate directly.",
-    `Target role: ${data.role}\n\nResume text:\n${data.resume}`,
-  ));
+  .handler(async ({ data, context }) => {
+    await checkTokenAllowance(context.userId);
+    const result = await generate(
+      new Request("https://polar-jobs.local/resume", { method: "POST" }),
+      "You are an expert resume coach. Review the provided resume for the named target role. Be specific and constructive. Organize the response into: Strong matches, Highest-impact improvements, and One rewritten example bullet. Do not invent candidate achievements or add qualifications not provided. Address the candidate directly.",
+      `Target role: ${data.role}\n\nResume text:\n${data.resume}`,
+    );
+    await recordTokenUsage(context.userId, "resume_review", result.inputTokens, result.outputTokens);
+    return result.text;
+  });
 
 const interviewFn = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -146,12 +194,14 @@ const interviewFn = createServerFn({ method: "POST" })
     if (!question || answer.length < 20 || !role) throw new Error("Write a little more so your answer can be reviewed.");
     return { question, answer, role };
   })
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
+    await checkTokenAllowance(context.userId);
     const response = await generate(
       new Request("https://polar-jobs.local/interview", { method: "POST" }),
       'You are an empathetic but honest interview coach. Evaluate the answer for clarity, specificity, relevance, and evidence. Return only valid JSON with an integer score from 1 to 100 and a concise feedback field in markdown with two strengths and two concrete next steps. Do not invent details. No markdown fences.',
       JSON.stringify({ targetRole: data.role, question: data.question, answer: data.answer }),
     );
+    await recordTokenUsage(context.userId, "interview_review", response.inputTokens, response.outputTokens);
     try {
       const parsed = JSON.parse(response) as { score?: unknown; feedback?: unknown };
       return {
@@ -173,12 +223,14 @@ const interviewQuestionFn = createServerFn({ method: "POST" })
     if (!role) throw new Error("Add a target role so your practice questions fit it.");
     return { role, category };
   })
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
+    await checkTokenAllowance(context.userId);
     const response = await generate(
       new Request("https://polar-jobs.local/interview-question", { method: "POST" }),
       "You are an experienced interview coach. Generate ONE realistic interview question for the named target role in the named category. Make it specific to the role and something a real interviewer would ask. Return only valid JSON with an object containing: question (string), tip (one short sentence on what a strong answer demonstrates), and category (the category you used, one of Behavioral, Situational, Technical, Leadership, Culture fit). No markdown fences.",
       JSON.stringify({ targetRole: data.role, category: data.category || "Behavioral" }),
     );
+    await recordTokenUsage(context.userId, "interview_question", response.inputTokens, response.outputTokens);
     let parsed: unknown;
     try { parsed = JSON.parse(response); } catch { parsed = null; }
     const value = parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : null;
@@ -204,12 +256,14 @@ const jobDescriptionMatchFn = createServerFn({ method: "POST" })
     }
     return { resume, jobDescription, role };
   })
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
+    await checkTokenAllowance(context.userId);
     const response = await generate(
       new Request("https://polar-jobs.local/job-match", { method: "POST" }),
       "You are a careful ATS and recruiting analyst. Compare the resume only against the supplied job description. Estimate a 0–100 ATS match score based on demonstrated skills, relevant experience, and required qualifications; do not imply that you know a real ATS algorithm. Separate exact or close keyword matches from missing or not-evidenced terms. Prioritize genuinely important requirements, distinguish absent evidence from proven lack of experience, never invent candidate qualifications, and give actionable suggestions grounded in the resume. Return only valid JSON with an object containing: score (integer 0–100), summary (string), matchedKeywords (array of strings), missingKeywords (array of objects with keyword, priority [high|medium|low], evidence), experienceGaps (array of objects with requirement, resumeEvidence, nextStep), and recommendations (array of strings). No markdown fences.",
       JSON.stringify({ targetRole: data.role, resume: data.resume, jobDescription: data.jobDescription }),
     );
+    await recordTokenUsage(context.userId, "job_match", response.inputTokens, response.outputTokens);
     let parsed: unknown;
     try { parsed = JSON.parse(response); } catch { throw new Error("The match report could not be formatted. Please scan again."); }
     return normalizeJobMatchResult(parsed);
