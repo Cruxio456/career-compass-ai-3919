@@ -7,11 +7,22 @@ import {
   ArrowDownRight, ArrowRight, ArrowUpRight, Award, BookOpenCheck, BriefcaseBusiness,
   Check, CheckCircle2, ChevronDown, Circle, Compass, FileText, Flame, Gauge,
   LogOut, MessageSquareText, PencilLine, Plus, Send, Sparkles, Target, TrendingUp,
-  Upload, UserRound, WandSparkles, X,
+  Upload, UserRound, WandSparkles, X, Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { deleteOwnAccount } from "@/lib/account.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
 import { generateCareerRoadmap, generateInterviewQuestion, matchJobDescription, reviewInterviewAnswer, reviewResume, type JobMatchResult } from "@/lib/career-ai.functions";
@@ -150,6 +161,8 @@ function PolarJobs() {
   const [questionBusy, setQuestionBusy] = useState(false);
   const [customQuestionDraft, setCustomQuestionDraft] = useState("");
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
   const currentQuestion = activeQuestion ?? buildQuestion(profile?.target_role || "your next role", questionCategory);
   const generateRoadmap = useServerFn(generateCareerRoadmap);
   const getResumeReview = useServerFn(reviewResume);
@@ -157,6 +170,8 @@ function PolarJobs() {
   const getInterviewReview = useServerFn(reviewInterviewAnswer);
   const getInterviewQuestion = useServerFn(generateInterviewQuestion);
   const extractResume = useServerFn(extractResumeText);
+  const deleteAccountFn = useServerFn(deleteOwnAccount);
+
 
   const saveProfile = async () => {
     if (!profile || !userId) return;
@@ -308,6 +323,23 @@ function PolarJobs() {
     if (error) toast.error("Couldn’t sign out. Please try again.");
   };
 
+const handleDeleteAccount = async () => {
+  setDeleteBusy(true);
+  try {
+    await deleteAccountFn();
+    await supabase.auth.signOut();
+    await queryClient.cancelQueries();
+    queryClient.clear();
+    setDeleteDialogOpen(false);
+    setAccountMenuOpen(false);
+    toast.success("Your account and all career data have been permanently deleted.");
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : "Failed to delete account. Please try again.");
+  } finally {
+    setDeleteBusy(false);
+  }
+};
+
 if (!authReady) {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
@@ -443,6 +475,20 @@ return (
                   <LogOut className="mr-2 size-4" />
                   Sign out
                 </Button>
+                
+                {/* Insert directly after line 445, before the closing </div> of line 446 */}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full justify-start text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  onClick={() => {
+                    setAccountMenuOpen(false);
+                    setDeleteDialogOpen(true);
+                  }}
+                >
+                  <Trash2 className="mr-2 size-4" />
+                  Delete account
+                </Button>
               </div>
             </>
           )}
@@ -499,6 +545,31 @@ return (
         </>
       )}
     </main>
+    {/* Insert between </main> and the final </div> on line 502 */}
+    <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This action cannot be undone. This permanently removes your sign-in credentials, 
+            profile settings, personalized roadmap tasks, and interview practice history.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={deleteBusy}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            disabled={deleteBusy}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            onClick={(e) => {
+              e.preventDefault();
+              void handleDeleteAccount();
+            }}
+          >
+            {deleteBusy ? "Deleting account…" : "Delete permanently"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   </div>
 );
 }
