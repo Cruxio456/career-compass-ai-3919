@@ -7,7 +7,7 @@ import {
   ArrowDownRight, ArrowRight, ArrowUpRight, Award, BookOpenCheck, BriefcaseBusiness,
   Check, CheckCircle2, ChevronDown, Circle, Compass, FileText, Flame, Gauge,
   LogOut, MessageSquareText, PencilLine, Plus, Send, Sparkles, Target, TrendingUp,
-  Upload, UserRound, WandSparkles, X, Trash2,
+  Upload, UserRound, WandSparkles, X, Trash2, Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -163,6 +163,34 @@ function PolarJobs() {
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const [tokenAlertOpen, setTokenAlertOpen] = useState(false);
+  const tokenQuery = useQuery({
+    queryKey: ["ai-tokens", userId],
+    enabled: Boolean(userId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("ai_usage_records")
+        .select("input_tokens, output_tokens")
+        .eq("user_id", userId as string);
+      if (error) throw error;
+      const used = (data ?? []).reduce(
+        (sum, row) => sum + (row.input_tokens ?? 0) + (row.output_tokens ?? 0),
+        0
+      );
+      const limit = 5000;
+      return { used, limit, remaining: Math.max(0, limit - used) };
+    },
+  });
+  const tokens = tokenQuery.data ?? { used: 0, limit: 5000, remaining: 5000 };
+  
+  const checkTokenError = (error: unknown) => {
+    const msg = error instanceof Error ? error.message : String(error);
+    if (msg.includes("TOKEN_LIMIT_REACHED") || tokens.remaining <= 0) {
+      setTokenAlertOpen(true);
+      return true;
+    }
+    return false;
+  };
   const currentQuestion = activeQuestion ?? buildQuestion(profile?.target_role || "your next role", questionCategory);
   const generateRoadmap = useServerFn(generateCareerRoadmap);
   const getResumeReview = useServerFn(reviewResume);
@@ -184,6 +212,7 @@ function PolarJobs() {
   };
 
   const createRoadmap = async () => {
+    if (tokens.remaining <= 0) { setTokenAlertOpen(true); return; }
     if (!profile?.target_role?.trim()) { setSection("Overview"); toast.message("Add your target role first to create a personal roadmap."); return; }
     setRoadmapBusy(true);
     try {
@@ -193,10 +222,11 @@ function PolarJobs() {
       const { error } = await supabase.from("roadmap_tasks").insert(result.tasks);
       if (error) throw error;
       await queryClient.invalidateQueries({ queryKey: ["polar-workspace", userId] });
+      await queryClient.invalidateQueries({ queryKey: ["ai-tokens", userId] });
       setSection("My roadmap");
       toast.success("Your personal roadmap is ready.");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Couldn’t create the roadmap just now.");
+      handleAiError(error, "Couldn’t create the roadmap just now.");
     } finally { setRoadmapBusy(false); }
   };
 
@@ -217,25 +247,32 @@ function PolarJobs() {
   };
 
   const submitResume = async () => {
+    if (tokens.remaining <= 0) { setTokenAlertOpen(true); return; }
     if (!profile) return;
     setResumeBusy(true); setResumeFeedback("");
     try {
       const result = await getResumeReview({ data: { role: profile.target_role || "the target role", resume: resumeText } });
       setResumeFeedback(result);
-    } catch (error) { toast.error(error instanceof Error ? error.message : "Resume feedback is unavailable right now."); }
-    finally { setResumeBusy(false); }
+      await queryClient.invalidateQueries({ queryKey: ["ai-tokens", userId] });
+    } catch (error) {
+      handleAiError(error, "Resume feedback is unavailable right now.");
+    } finally { setResumeBusy(false); }
   };
 
   const submitJobMatch = async () => {
+    if (tokens.remaining <= 0) { setTokenAlertOpen(true); return; }
     if (!profile) return;
     setMatchBusy(true); setMatchResult(null);
     try {
       const result = await getJobMatch({ data: { role: profile.target_role, resume: resumeText, jobDescription } });
       setMatchResult(result);
+      await queryClient.invalidateQueries({ queryKey: ["ai-tokens", userId] });
       toast.success("Your job match report is ready.");
-    } catch (error) { toast.error(error instanceof Error ? error.message : "The job description couldn’t be scanned right now."); }
-    finally { setMatchBusy(false); }
+    } catch (error) {
+      handleAiError(error, "The job description couldn’t be scanned right now.");
+    } finally { setMatchBusy(false); }
   };
+
 
   const uploadResumeFile = async (file: File) => {
     setResumeUploadBusy(true);
@@ -253,6 +290,7 @@ function PolarJobs() {
   };
 
   const submitInterviewAnswer = async () => {
+    if (tokens.remaining <= 0) { setTokenAlertOpen(true); return; }
     if (!profile || !userId) return;
     setInterviewBusy(true); setLatestFeedback(null);
     try {
@@ -261,9 +299,11 @@ function PolarJobs() {
       if (error) throw error;
       setLatestFeedback(result); setAnswer("");
       await queryClient.invalidateQueries({ queryKey: ["polar-workspace", userId] });
+      await queryClient.invalidateQueries({ queryKey: ["ai-tokens", userId] });
       toast.success("Your answer has been reviewed.");
-    } catch (error) { toast.error(error instanceof Error ? error.message : "Your answer couldn’t be reviewed just now."); }
-    finally { setInterviewBusy(false); }
+    } catch (error) {
+      handleAiError(error, "Your answer couldn’t be reviewed just now.");
+    } finally { setInterviewBusy(false); }
   };
 
   const pickQuestionCategory = (category: string) => {
@@ -273,6 +313,7 @@ function PolarJobs() {
   };
 
   const generateQuestion = async () => {
+    if (tokens.remaining <= 0) { setTokenAlertOpen(true); return; }
     if (!profile) return;
     setQuestionBusy(true);
     try {
@@ -280,10 +321,12 @@ function PolarJobs() {
       setActiveQuestion(result.question);
       setQuestionTip(result.tip);
       if (result.category) setQuestionCategory(result.category);
+      await queryClient.invalidateQueries({ queryKey: ["ai-tokens", userId] });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "A fresh question couldn’t be generated just now.");
+      handleAiError(error, "A fresh question couldn’t be generated just now.");
     } finally { setQuestionBusy(false); }
   };
+
 
   const useCustomQuestion = () => {
     const draft = customQuestionDraft.trim().slice(0, 800);
@@ -407,18 +450,32 @@ return (
           ))}
         </nav>
 
-        {/* Right: Account Circle with Dropdown */}
-        <div className="relative shrink-0">
+        {/* Right: Token pill & Account Circle */}
+        <div className="flex items-center gap-3 shrink-0">
           <button
             type="button"
-            onClick={() => setAccountMenuOpen((prev) => !prev)}
-            className="flex size-10 items-center justify-center rounded-full bg-foreground text-background font-semibold text-sm shadow-xs transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            aria-label="Account menu"
-            aria-expanded={accountMenuOpen}
+            onClick={() => setTokenAlertOpen(true)}
+            className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold shadow-xs transition ${
+              tokens.remaining <= 0
+                ? "bg-destructive text-destructive-foreground animate-pulse"
+                : "bg-white/20 hover:bg-white/30 text-white"
+            }`}
+            title="View token balance and upgrade"
           >
-            {/* Shows first initial of name or email, or user icon */}
-            {(profile?.full_name?.[0] || userEmail?.[0] || "U").toUpperCase()}
+            <Zap className="size-3.5 fill-current" />
+            <span>{tokens.remaining.toLocaleString()} tokens</span>
           </button>
+
+          <div className="relative shrink-0">
+            <button
+              type="button"
+              onClick={() => setAccountMenuOpen((prev) => !prev)}
+              className="flex size-10 items-center justify-center rounded-full bg-foreground text-background font-semibold text-sm shadow-xs transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label="Account menu"
+              aria-expanded={accountMenuOpen}
+            >
+              {(profile?.full_name?.[0] || userEmail?.[0] || "U").toUpperCase()}
+            </button>
 
           {/* Account Popover Menu */}
           {accountMenuOpen && (
@@ -566,6 +623,45 @@ return (
             }}
           >
             {deleteBusy ? "Deleting account…" : "Delete permanently"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+          <AlertDialog open={tokenAlertOpen} onOpenChange={setTokenAlertOpen}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <div className="flex items-center gap-2">
+            <Zap className="size-5 text-amber-500 fill-amber-500" />
+            <AlertDialogTitle>
+              {tokens.remaining <= 0 ? "You've run out of tokens" : "Token Balance & Plan"}
+            </AlertDialogTitle>
+          </div>
+          <AlertDialogDescription className="space-y-3 pt-2 text-sm text-muted-foreground">
+            <p>
+              {tokens.remaining <= 0
+                ? "You have used all 5,000 free tokens for AI roadmaps, resume feedback, and interview coaching."
+                : `You have used ${tokens.used.toLocaleString()} of your ${tokens.limit.toLocaleString()} free tokens (${tokens.remaining.toLocaleString()} tokens remaining).`}
+            </p>
+            <div className="rounded-xl border border-border bg-secondary/50 p-3.5 text-foreground">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-sm">Polar Jobs Pro</span>
+                <span className="font-bold text-sm text-primary">₹100 / month</span>
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Get unlimited AI generations, resume scans, and mock interview coaching.
+              </p>
+            </div>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Dismiss</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={() => {
+              setTokenAlertOpen(false);
+              toast.info("Subscription billing (₹100/mo) is coming soon. Stay tuned!");
+            }}
+          >
+            Upgrade for ₹100/mo
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
